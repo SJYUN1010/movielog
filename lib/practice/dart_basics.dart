@@ -1,5 +1,6 @@
 // Mission 2. Dart 연습
 // 실행: dart run lib/practice/dart_basics.dart
+// ignore_for_file: avoid_print
 
 class Movie {
   const Movie({required this.id, required this.title});
