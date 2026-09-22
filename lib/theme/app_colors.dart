@@ -10,4 +10,9 @@ abstract final class AppColors {
   static const black = Color(0xFF1C1B1F);
   static const gray = Color(0xFF79747E);
   static const textMuted = Color(0xFF494551);
+  static const outline = Color(0xFFCBC4D2);
+  static const placeholder = Color(0xFF7A7582);
+  static const error = Color(0xFFB3261E);
+  static const errorFill = Color(0xFFFFDAD6);
+  static const buttonDisabled = Color(0xFFCCC2DC);
 }
