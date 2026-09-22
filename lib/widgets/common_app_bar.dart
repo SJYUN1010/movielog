@@ -1,4 +1,5 @@
 import 'package:flutter/material.dart';
+import 'package:flutter_svg/flutter_svg.dart';
 
 import '../theme/app_colors.dart';
 import '../theme/app_text_styles.dart';
@@ -22,15 +23,21 @@ class CommonAppBar extends StatelessWidget implements PreferredSizeWidget {
   @override
   Widget build(BuildContext context) {
     return AppBar(
-      title: Text(
-        title,
-        style: titleStyle ?? AppTextStyles.titleLarge.copyWith(color: AppColors.violet),
-      ),
+      title: Text(title, style: titleStyle ?? AppTextStyles.appBarTitle),
       centerTitle: centerTitle,
       leading: onBack == null
           ? null
           : IconButton(
-              icon: const Icon(Icons.arrow_back),
+              tooltip: '뒤로가기',
+              icon: SvgPicture.asset(
+                'assets/icons/arrow_back.svg',
+                width: 16,
+                height: 16,
+                colorFilter: const ColorFilter.mode(
+                  AppColors.textMuted,
+                  BlendMode.srcIn,
+                ),
+              ),
               onPressed: onBack,
             ),
       actions: actions,

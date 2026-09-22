@@ -84,4 +84,50 @@ abstract final class AppTextStyles {
     letterSpacing: 0,
     color: AppColors.violet,
   );
+
+  static const appBarTitle = TextStyle(
+    fontSize: 22,
+    fontWeight: FontWeight.w500,
+    height: 28 / 22,
+    letterSpacing: 0,
+    color: AppColors.violet,
+  );
+
+  static const fieldLabel = sectionHeading;
+
+  static const inputText = TextStyle(
+    fontSize: 16,
+    fontWeight: FontWeight.w400,
+    height: 1.5,
+    letterSpacing: 0,
+    color: AppColors.black,
+  );
+
+  static const inputHint = TextStyle(
+    fontSize: 16,
+    fontWeight: FontWeight.w500,
+    height: 1.5,
+    letterSpacing: 0,
+    color: AppColors.placeholder,
+  );
+
+  static const errorText = TextStyle(
+    fontSize: 12,
+    fontWeight: FontWeight.w500,
+    height: 16 / 12,
+    letterSpacing: 0,
+    color: AppColors.error,
+  );
+
+  static const checkboxLabel = sectionHeading;
+
+  static const filledButtonLabel = TextStyle(
+    fontSize: 16,
+    fontWeight: FontWeight.w500,
+    height: 1.5,
+    letterSpacing: 0,
+    color: AppColors.white,
+  );
+
+  static const linkText = buttonLabel;
 }
