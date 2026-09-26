@@ -1,5 +1,6 @@
 import 'package:flutter/material.dart';
 import 'package:flutter_svg/flutter_svg.dart';
+import 'package:go_router/go_router.dart';
 
 import 'theme/app_colors.dart';
 import 'theme/app_text_styles.dart';
@@ -38,9 +39,7 @@ class StartScreen extends StatelessWidget {
               ),
               const Spacer(flex: 3),
               ElevatedButton(
-                onPressed: () {
-                  debugPrint('시작하기 버튼을 눌렀습니다.');
-                },
+                onPressed: () => context.go('/signup'),
                 style: ElevatedButton.styleFrom(
                   backgroundColor: AppColors.violet,
                   foregroundColor: AppColors.white,
