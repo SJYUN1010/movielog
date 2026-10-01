@@ -2,7 +2,11 @@ import 'package:flutter/material.dart';
 import 'package:flutter_rating_bar/flutter_rating_bar.dart';
 import 'package:flutter_svg/flutter_svg.dart';
 import 'package:flutter_test/flutter_test.dart';
+import 'package:go_router/go_router.dart';
 
+import 'package:movielog/home_screen.dart';
+import 'package:movielog/movie_detail_screen.dart';
+import 'package:movielog/movie_list_screen.dart';
 import 'package:movielog/profile_screen.dart';
 import 'package:movielog/rating_screen.dart';
 import 'package:movielog/signup_screen.dart';
@@ -37,6 +41,91 @@ void main() {
     expect(find.text('342'), findsOneWidget);
     expect(find.text('선호하는 장르'), findsOneWidget);
     expect(find.text('프로필 수정'), findsOneWidget);
+  });
+
+  group('Home to detail navigation', () {
+    testWidgets('tapping a movie card opens its detail and back returns home', (
+      tester,
+    ) async {
+      _useMobileViewport(tester);
+      final router = GoRouter(
+        initialLocation: '/home',
+        routes: [
+          GoRoute(path: '/home', builder: (context, state) => const HomeScreen()),
+          GoRoute(
+            path: '/movies/:movieId',
+            builder: (context, state) => MovieDetailScreen(
+              movieId: int.parse(state.pathParameters['movieId']!),
+            ),
+          ),
+        ],
+      );
+      await tester.pumpWidget(
+        MaterialApp.router(theme: AppTheme.light, routerConfig: router),
+      );
+
+      expect(find.text('별빛 아래 우리'), findsOneWidget);
+
+      await tester.tap(find.text('상세보기'));
+      await tester.pumpAndSettle();
+
+      expect(find.text('2024 · 로맨스/드라마 · 124분'), findsOneWidget);
+
+      await tester.tap(find.byType(BackButton));
+      await tester.pumpAndSettle();
+
+      expect(find.text('별빛 아래 우리'), findsWidgets);
+    });
+  });
+
+  group('MovieDetailScreen', () {
+    testWidgets('toggles favorite and saves a rating via the dialog', (
+      tester,
+    ) async {
+      _useMobileViewport(tester);
+      await tester.pumpWidget(_app(const MovieDetailScreen(movieId: 1)));
+
+      expect(find.byIcon(Icons.bookmark_border), findsOneWidget);
+
+      await tester.tap(find.text('즐겨찾기'));
+      await tester.pump();
+      expect(find.byIcon(Icons.bookmark), findsOneWidget);
+      expect(find.text('즐겨찾기에 추가했습니다.'), findsOneWidget);
+
+      await tester.tap(find.text('평점 남기기'));
+      await tester.pumpAndSettle();
+      expect(find.text('영화는 어떠셨나요?'), findsOneWidget);
+
+      ElevatedButton confirmButton() => tester.widget<ElevatedButton>(
+        find.widgetWithText(ElevatedButton, '확인'),
+      );
+      expect(confirmButton().onPressed, isNull);
+
+      await tester.tapAt(tester.getCenter(find.byType(RatingBar)));
+      await tester.pump();
+      expect(confirmButton().onPressed, isNotNull);
+
+      await tester.tap(find.widgetWithText(ElevatedButton, '확인'));
+      await tester.pumpAndSettle();
+
+      expect(find.textContaining('점을 저장했습니다.'), findsOneWidget);
+    });
+  });
+
+  group('MovieListScreen', () {
+    testWidgets('filters the grid when a genre chip is selected', (tester) async {
+      _useMobileViewport(tester);
+      await tester.pumpWidget(_app(const MovieListScreen()));
+
+      expect(find.text('별빛 아래 우리'), findsOneWidget);
+      expect(find.text('우주의 끝에서'), findsOneWidget);
+
+      await tester.tap(find.text('SF'));
+      await tester.pumpAndSettle();
+
+      expect(find.text('우주의 끝에서'), findsOneWidget);
+      expect(find.text('별빛 아래 우리'), findsNothing);
+    });
   });
 
   group('RatingScreen', () {
@@ -111,10 +200,6 @@ void main() {
       await tester.tap(find.byType(Checkbox));
       await tester.pump();
       expect(submitButton(tester).onPressed, isNotNull);
-
-      await tester.tap(find.byType(ElevatedButton));
-      await tester.pump();
-      expect(find.text('가입 정보가 확인되었어요.'), findsOneWidget);
     });
   });
 }

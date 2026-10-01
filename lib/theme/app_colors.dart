@@ -15,4 +15,7 @@ abstract final class AppColors {
   static const error = Color(0xFFB3261E);
   static const errorFill = Color(0xFFFFDAD6);
   static const buttonDisabled = Color(0xFFCCC2DC);
+  static const chipUnselected = Color(0xFFE6E0E9);
+  static const heroSubtitle = Color(0xFFF8F2FA);
+  static const ratingBadgeText = Color(0xFFF5EFF7);
 }
