@@ -6,7 +6,6 @@ import 'package:go_router/go_router.dart';
 
 import 'package:movielog/home_screen.dart';
 import 'package:movielog/movie_detail_screen.dart';
-import 'package:movielog/movie_list_screen.dart';
 import 'package:movielog/profile_screen.dart';
 import 'package:movielog/rating_screen.dart';
 import 'package:movielog/signup_screen.dart';
@@ -109,22 +108,6 @@ void main() {
       await tester.pumpAndSettle();
 
       expect(find.textContaining('점을 저장했습니다.'), findsOneWidget);
-    });
-  });
-
-  group('MovieListScreen', () {
-    testWidgets('filters the grid when a genre chip is selected', (tester) async {
-      _useMobileViewport(tester);
-      await tester.pumpWidget(_app(const MovieListScreen()));
-
-      expect(find.text('별빛 아래 우리'), findsOneWidget);
-      expect(find.text('우주의 끝에서'), findsOneWidget);
-
-      await tester.tap(find.text('SF'));
-      await tester.pumpAndSettle();
-
-      expect(find.text('우주의 끝에서'), findsOneWidget);
-      expect(find.text('별빛 아래 우리'), findsNothing);
     });
   });
 

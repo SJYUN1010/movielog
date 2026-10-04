@@ -11,8 +11,13 @@ import '../start_screen.dart';
 class AppRouter {
   AppRouter._();
 
+  static const _initialRoute = String.fromEnvironment(
+    'INITIAL_ROUTE',
+    defaultValue: '/start',
+  );
+
   static final router = GoRouter(
-    initialLocation: '/start',
+    initialLocation: _initialRoute,
     routes: [
       GoRoute(
         path: '/start',
