@@ -1,13 +1,13 @@
 import 'package:flutter/material.dart';
 import 'package:go_router/go_router.dart';
 
-import 'signup_validators.dart';
-import 'theme/app_text_styles.dart';
-import 'widgets/common_app_bar.dart';
-import 'widgets/login_prompt.dart';
-import 'widgets/movielog_text_form_field.dart';
-import 'widgets/submit_button.dart';
-import 'widgets/terms_checkbox.dart';
+import '../signup_validators.dart';
+import '../theme/app_text_styles.dart';
+import '../widgets/common_app_bar.dart';
+import '../widgets/login_prompt.dart';
+import '../widgets/movielog_text_form_field.dart';
+import '../widgets/submit_button.dart';
+import '../widgets/terms_checkbox.dart';
 
 class SignUpScreen extends StatefulWidget {
   const SignUpScreen({super.key});

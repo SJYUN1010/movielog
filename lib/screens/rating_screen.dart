@@ -1,9 +1,9 @@
 import 'package:flutter/material.dart';
 
-import 'theme/app_text_styles.dart';
-import 'widgets/common_app_bar.dart';
-import 'widgets/rating_input.dart';
-import 'widgets/submit_button.dart';
+import '../theme/app_text_styles.dart';
+import '../widgets/common_app_bar.dart';
+import '../widgets/rating_input.dart';
+import '../widgets/submit_button.dart';
 
 class RatingScreen extends StatefulWidget {
   const RatingScreen({super.key});

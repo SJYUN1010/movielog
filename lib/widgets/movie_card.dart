@@ -1,20 +1,22 @@
 import 'package:flutter/material.dart';
 import 'package:go_router/go_router.dart';
 
-import '../movie.dart';
+import '../data/dto/tmdb_movie_dto.dart';
 import '../theme/app_colors.dart';
 import '../theme/app_text_styles.dart';
+import 'tmdb_poster_image.dart';
 
 class MovieCard extends StatelessWidget {
-  const MovieCard({super.key, required this.movie});
+  const MovieCard({super.key, required this.movie, required this.subtitle});
 
-  final Movie movie;
+  final TmdbMovieDto movie;
+  final String subtitle;
 
   @override
   Widget build(BuildContext context) {
     return GestureDetector(
       behavior: HitTestBehavior.opaque,
-      onTap: () => context.push('/movies/${movie.id}'),
+      onTap: () => context.push('/movies/${movie.id}', extra: movie),
       child: Column(
         crossAxisAlignment: CrossAxisAlignment.start,
         children: [
@@ -25,11 +27,11 @@ class MovieCard extends StatelessWidget {
               child: Stack(
                 fit: StackFit.expand,
                 children: [
-                  Image.asset(movie.posterAsset, fit: BoxFit.cover),
+                  TmdbPosterImage(posterPath: movie.posterPath),
                   Positioned(
                     top: 8,
                     right: 8,
-                    child: _RatingBadge(rating: movie.rating),
+                    child: _RatingBadge(rating: movie.fiveStarRating),
                   ),
                 ],
               ),
@@ -44,7 +46,7 @@ class MovieCard extends StatelessWidget {
           ),
           const SizedBox(height: 2),
           Text(
-            '${movie.genreLabel} · ${movie.year}',
+            subtitle,
             maxLines: 1,
             overflow: TextOverflow.ellipsis,
             style: AppTextStyles.ratingCaption,

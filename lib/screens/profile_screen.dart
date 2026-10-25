@@ -1,10 +1,10 @@
 import 'package:flutter/material.dart';
 
-import 'widgets/common_app_bar.dart';
-import 'widgets/edit_profile_button.dart';
-import 'widgets/favorite_genres.dart';
-import 'widgets/profile_header.dart';
-import 'widgets/stat_item.dart';
+import '../widgets/common_app_bar.dart';
+import '../widgets/edit_profile_button.dart';
+import '../widgets/favorite_genres.dart';
+import '../widgets/profile_header.dart';
+import '../widgets/stat_item.dart';
 
 class ProfileScreen extends StatelessWidget {
   const ProfileScreen({super.key});
