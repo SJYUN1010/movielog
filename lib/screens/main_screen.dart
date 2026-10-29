@@ -1,7 +1,7 @@
 import 'package:flutter/material.dart';
 import 'package:go_router/go_router.dart';
 
-import 'theme/app_colors.dart';
+import '../theme/app_colors.dart';
 
 class MainScreen extends StatelessWidget {
   const MainScreen({

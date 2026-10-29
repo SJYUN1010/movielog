@@ -1,15 +1,18 @@
 import 'package:flutter/material.dart';
 
-import 'movie.dart';
-import 'theme/app_colors.dart';
-import 'theme/app_text_styles.dart';
-import 'widgets/movie_action_bar.dart';
-import 'widgets/rating_dialog.dart';
+import '../data/dto/tmdb_movie_dto.dart';
+import '../theme/app_colors.dart';
+import '../theme/app_text_styles.dart';
+import '../widgets/movie_action_bar.dart';
+import '../widgets/rating_dialog.dart';
+import '../widgets/tmdb_poster_image.dart';
 
 class MovieDetailScreen extends StatefulWidget {
-  const MovieDetailScreen({super.key, required this.movieId});
+  const MovieDetailScreen({super.key, required this.movieId, this.movie});
 
+  /// 이후 평점 저장 API에 사용할 TMDB 영화 id입니다.
   final int movieId;
+  final TmdbMovieDto? movie;
 
   @override
   State<MovieDetailScreen> createState() => _MovieDetailScreenState();
@@ -52,7 +55,7 @@ class _MovieDetailScreenState extends State<MovieDetailScreen> {
 
   @override
   Widget build(BuildContext context) {
-    final movie = findMovieById(widget.movieId);
+    final movie = widget.movie;
 
     if (movie == null) {
       return Scaffold(
@@ -63,18 +66,14 @@ class _MovieDetailScreenState extends State<MovieDetailScreen> {
       );
     }
 
+    final year = movie.releaseYear;
+
     return Scaffold(
       extendBodyBehindAppBar: true,
       appBar: AppBar(
         backgroundColor: Colors.transparent,
         elevation: 0,
         leading: const BackButton(color: AppColors.white),
-        actions: const [
-          Padding(
-            padding: EdgeInsets.only(right: 16),
-            child: Icon(Icons.share, color: AppColors.white),
-          ),
-        ],
       ),
       body: SingleChildScrollView(
         child: Column(
@@ -82,7 +81,7 @@ class _MovieDetailScreenState extends State<MovieDetailScreen> {
           children: [
             AspectRatio(
               aspectRatio: 3 / 4,
-              child: Image.asset(movie.posterAsset, fit: BoxFit.cover),
+              child: TmdbPosterImage(posterPath: movie.posterPath),
             ),
             Padding(
               padding: const EdgeInsets.fromLTRB(16, 24, 16, 40),
@@ -90,47 +89,30 @@ class _MovieDetailScreenState extends State<MovieDetailScreen> {
                 crossAxisAlignment: CrossAxisAlignment.start,
                 children: [
                   Text(movie.title, style: AppTextStyles.detailTitle),
-                  const SizedBox(height: 8),
-                  Text(
-                    '${movie.year} · ${movie.genreLabel} · ${movie.runtimeMinutes}분',
-                    style: AppTextStyles.detailMeta,
-                  ),
+                  if (year != null) ...[
+                    const SizedBox(height: 8),
+                    Text('$year', style: AppTextStyles.detailMeta),
+                  ],
                   const SizedBox(height: 16),
                   Row(
                     children: [
-                      _StarRow(rating: movie.rating),
+                      _StarRow(rating: movie.fiveStarRating),
                       const SizedBox(width: 12),
-                      Text(movie.rating.toStringAsFixed(1), style: AppTextStyles.ratingNumber),
-                      const SizedBox(width: 6),
                       Text(
-                        '(${movie.voteCount})',
-                        style: AppTextStyles.voteCount,
+                        movie.fiveStarRating.toStringAsFixed(1),
+                        style: AppTextStyles.ratingNumber,
                       ),
-                    ],
-                  ),
-                  const SizedBox(height: 20),
-                  Wrap(
-                    spacing: 8,
-                    runSpacing: 8,
-                    children: [
-                      for (final tag in movie.tags)
-                        Container(
-                          padding: const EdgeInsets.symmetric(
-                            horizontal: 16,
-                            vertical: 10,
-                          ),
-                          decoration: BoxDecoration(
-                            color: AppColors.chipUnselected,
-                            borderRadius: BorderRadius.circular(9999),
-                          ),
-                          child: Text(tag, style: AppTextStyles.tagChip),
-                        ),
+                      const SizedBox(width: 6),
+                      Text('(${movie.voteCount})', style: AppTextStyles.voteCount),
                     ],
                   ),
                   const SizedBox(height: 32),
                   const Text('시놉시스', style: AppTextStyles.synopsisHeading),
                   const SizedBox(height: 12),
-                  Text(movie.synopsis, style: AppTextStyles.synopsisBody),
+                  Text(
+                    movie.overview.isEmpty ? '등록된 줄거리가 없습니다.' : movie.overview,
+                    style: AppTextStyles.synopsisBody,
+                  ),
                   if (_myRating != null) ...[
                     const SizedBox(height: 24),
                     Row(
@@ -170,7 +152,7 @@ class _StarRow extends StatelessWidget {
       mainAxisSize: MainAxisSize.min,
       children: List.generate(5, (index) {
         final filled = rating - index;
-        IconData icon;
+        final IconData icon;
         if (filled >= 1) {
           icon = Icons.star_rounded;
         } else if (filled >= 0.5) {
