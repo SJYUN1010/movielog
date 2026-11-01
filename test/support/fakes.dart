@@ -3,6 +3,9 @@ import 'package:dio/dio.dart';
 import 'package:movielog/data/dto/tmdb_genre_dto.dart';
 import 'package:movielog/data/dto/tmdb_movie_dto.dart';
 import 'package:movielog/data/dto/tmdb_movie_page_dto.dart';
+import 'package:movielog/data/models/rating_dto.dart';
+import 'package:movielog/data/services/member_check_service.dart';
+import 'package:movielog/data/services/rating_api_service.dart';
 import 'package:movielog/data/services/tmdb_movie_service.dart';
 import 'package:movielog/genre_preference.dart';
 
@@ -97,6 +100,21 @@ class FakeTmdbMovieService extends TmdbMovieService {
     );
   }
 
+  /// id별 영화 상세입니다. 없는 id는 TMDB 404처럼 null을 돌려줍니다.
+  final movieDetails = <int, TmdbMovieDto>{};
+  final failingDetailIds = <int>{};
+  final detailCalls = <int>[];
+
+  @override
+  Future<TmdbMovieDto?> findMovieById(int movieId) async {
+    detailCalls.add(movieId);
+    await _wait();
+    if (failingDetailIds.contains(movieId)) {
+      throw DioException(requestOptions: RequestOptions(path: '/movie/$movieId'));
+    }
+    return movieDetails[movieId];
+  }
+
   @override
   Future<List<TmdbGenreDto>> fetchGenres() async {
     genreCalls++;
@@ -116,4 +134,87 @@ class MemoryGenrePreference implements GenrePreference {
 
   @override
   Future<void> save(int? genreId) async => value = genreId;
+}
+
+
+DioException dioFailure(String path, {int? statusCode}) {
+  final options = RequestOptions(path: path);
+  return DioException(
+    requestOptions: options,
+    response: statusCode == null
+        ? null
+        : Response<dynamic>(requestOptions: options, statusCode: statusCode),
+    type: statusCode == null
+        ? DioExceptionType.connectionError
+        : DioExceptionType.badResponse,
+  );
+}
+
+class FakeMemberCheckService extends MemberCheckService {
+  FakeMemberCheckService({
+    Set<String>? takenNicknames,
+    Set<String>? takenEmails,
+    this.delay = Duration.zero,
+  }) : takenNicknames = takenNicknames ?? {'영화광'},
+       takenEmails = takenEmails ?? {'movie@umc.com'},
+       super(Dio());
+
+  final Set<String> takenNicknames;
+  final Set<String> takenEmails;
+  Duration delay;
+  bool fail = false;
+
+  final nicknameCalls = <String>[];
+  final emailCalls = <String>[];
+
+  @override
+  Future<bool> checkNickname(String nickname) async {
+    nicknameCalls.add(nickname.trim());
+    await Future<void>.delayed(delay);
+    if (fail) throw dioFailure('/v5/members/nickname');
+    return !takenNicknames.contains(nickname.trim());
+  }
+
+  @override
+  Future<bool> checkEmail(String email) async {
+    emailCalls.add(email.trim());
+    await Future<void>.delayed(delay);
+    if (fail) throw dioFailure('/v5/members/email');
+    return !takenEmails.contains(email.trim());
+  }
+}
+
+RatingDto ratingDto(
+  int ratingId, {
+  int movieId = 550,
+  int score = 5,
+  String? comment = '좋아요',
+}) {
+  return RatingDto(
+    ratingId: ratingId,
+    movieId: movieId,
+    score: score,
+    comment: comment,
+    createdAt: DateTime.utc(2026, 10, 31, 3),
+  );
+}
+
+class FakeRatingApiService extends RatingApiService {
+  FakeRatingApiService({List<RatingDto>? ratings, this.delay = Duration.zero})
+    : ratings = ratings ?? [],
+      super(Dio());
+
+  List<RatingDto> ratings;
+  Duration delay;
+  DioException? failure;
+  final requestedMemberIds = <int>[];
+
+  @override
+  Future<List<RatingDto>> fetchMyRatings(int memberId) async {
+    requestedMemberIds.add(memberId);
+    await Future<void>.delayed(delay);
+    final error = failure;
+    if (error != null) throw error;
+    return ratings;
+  }
 }

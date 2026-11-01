@@ -13,6 +13,8 @@ import 'package:movielog/screens/movie_list_screen.dart';
 import 'package:movielog/theme/app_theme.dart';
 import 'package:movielog/view_models/movie_home_view_model.dart';
 import 'package:movielog/view_models/movie_list_view_model.dart';
+import 'package:movielog/widgets/genre_filter_chips.dart';
+import 'package:movielog/widgets/movie_list_retry_dialog.dart';
 
 import 'support/fakes.dart';
 
@@ -200,7 +202,12 @@ void main() {
       expect(service.discoverCalls.map((c) => c.genreId).toSet(), {878});
     });
 
-    testWidgets('Empty, Error and retry', (tester) async {
+    Finder dialogButton(String label) => find.descendant(
+      of: find.byType(MovieListRetryDialog),
+      matching: find.text(label),
+    );
+
+    testWidgets('Empty, then Error with the retry Dialog and retry', (tester) async {
       final service = FakeTmdbMovieService()..emptyDiscover = true;
       await _pumpApp(tester, service, initial: '/movies');
       await tester.pumpAndSettle();
@@ -211,16 +218,65 @@ void main() {
         ..failDiscover = true;
       await tester.tap(find.text('SF'));
       await tester.pumpAndSettle();
-      expect(find.text('영화를 불러오지 못했습니다.'), findsOneWidget);
+      expect(find.byType(MovieListRetryDialog), findsOneWidget);
+      expect(find.text('영화를 불러오지 못했어요'), findsOneWidget);
+      expect(find.textContaining('DioException'), findsNothing);
 
       service
         ..failDiscover = false
         ..discoverCalls.clear();
-      await tester.tap(find.text('다시 시도'));
+      await tester.tap(dialogButton('다시 시도'));
       await tester.pumpAndSettle();
 
+      expect(find.byType(MovieListRetryDialog), findsNothing);
       expect(find.byType(GridView), findsOneWidget);
       expect(service.discoverCalls.first.genreId, 878);
+      expect(service.discoverCalls.first.page, 1);
+    });
+
+    testWidgets('a failure keeps the last list behind the Dialog; cancel restores its genre', (
+      tester,
+    ) async {
+      final service = FakeTmdbMovieService();
+      final preference = MemoryGenrePreference();
+      await _pumpApp(tester, service, initial: '/movies', preference: preference);
+      await tester.pumpAndSettle();
+      expect(find.byType(GridView), findsOneWidget);
+
+      service.failDiscover = true;
+      await tester.tap(find.text('SF'));
+      await tester.pumpAndSettle();
+
+      expect(find.byType(MovieListRetryDialog), findsOneWidget);
+      // Dialog 뒤에는 최근에 성공한 목록이 그대로 남아 있습니다.
+      expect(find.byType(GridView), findsOneWidget);
+
+      await tester.tap(dialogButton('취소'));
+      await tester.pumpAndSettle();
+
+      expect(find.byType(MovieListRetryDialog), findsNothing);
+      expect(find.byType(GridView), findsOneWidget);
+      final chips = tester.widget<GenreFilterChips>(find.byType(GenreFilterChips));
+      expect(chips.selectedGenreId, isNull);
+      expect(preference.value, isNull);
+    });
+
+    testWidgets('the Dialog appears once per failure, not on every rebuild', (tester) async {
+      final service = FakeTmdbMovieService()..failDiscover = true;
+      await _pumpApp(tester, service, initial: '/movies');
+      await tester.pumpAndSettle();
+      expect(find.byType(MovieListRetryDialog), findsOneWidget);
+
+      await tester.tap(dialogButton('취소'));
+      await tester.pumpAndSettle();
+
+      // 한 번도 성공한 적이 없으면 Error 화면과 다시 시도 버튼이 남습니다.
+      expect(find.byType(MovieListRetryDialog), findsNothing);
+      expect(find.text('영화를 불러오지 못했습니다.'), findsOneWidget);
+
+      await tester.tap(find.text('다시 시도'));
+      await tester.pumpAndSettle();
+      expect(find.byType(MovieListRetryDialog), findsOneWidget);
     });
 
     testWidgets('restores the saved genre chip on launch', (tester) async {
