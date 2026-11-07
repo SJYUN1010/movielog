@@ -1,8 +1,10 @@
 import 'package:flutter/material.dart';
+import 'package:go_router/go_router.dart';
 
 import '../widgets/common_app_bar.dart';
 import '../widgets/edit_profile_button.dart';
 import '../widgets/favorite_genres.dart';
+import '../widgets/my_ratings_entry_tile.dart';
 import '../widgets/profile_header.dart';
 import '../widgets/stat_item.dart';
 
@@ -47,6 +49,8 @@ class ProfileScreen extends StatelessWidget {
                     ),
                 ],
               ),
+              const SizedBox(height: 24),
+              MyRatingsEntryTile(onTap: () => context.push('/my/ratings')),
               const SizedBox(height: 24),
               const FavoriteGenres(genres: _genres),
             ],

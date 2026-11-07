@@ -148,6 +148,58 @@ void main() {
       expect(service.discoverCalls.first.page, 1);
     });
 
+    test('failure keeps the last list; cancelRetry restores it and its genre', () async {
+      final service = FakeTmdbMovieService();
+      final preference = MemoryGenrePreference();
+      final viewModel = MovieListViewModel(service, genrePreference: preference);
+      await viewModel.load();
+      final lastList = viewModel.movies;
+
+      service.failDiscover = true;
+      await viewModel.selectGenre(878);
+      expect(viewModel.status, MovieListLoadStatus.error);
+      expect(viewModel.selectedGenreId, 878);
+      expect(viewModel.movies, lastList);
+      expect(viewModel.errorCount, 1);
+
+      viewModel.cancelRetry();
+
+      expect(viewModel.status, MovieListLoadStatus.success);
+      expect(viewModel.selectedGenreId, isNull);
+      expect(viewModel.movies, lastList);
+      await Future<void>.delayed(Duration.zero);
+      expect(preference.value, isNull);
+    });
+
+    test('retry after a failure uses the selected genre from page 1', () async {
+      final service = FakeTmdbMovieService();
+      final viewModel = MovieListViewModel(service);
+      await viewModel.load();
+      service.failDiscover = true;
+      await viewModel.selectGenre(18);
+      expect(viewModel.errorCount, 1);
+
+      service
+        ..failDiscover = false
+        ..discoverCalls.clear();
+      await viewModel.retry();
+
+      expect(viewModel.status, MovieListLoadStatus.success);
+      expect(service.discoverCalls.first.page, 1);
+      expect(service.discoverCalls.first.genreId, 18);
+    });
+
+    test('cancelRetry does nothing before the first success', () async {
+      final service = FakeTmdbMovieService()..failDiscover = true;
+      final viewModel = MovieListViewModel(service);
+      await viewModel.load();
+      expect(viewModel.status, MovieListLoadStatus.error);
+
+      viewModel.cancelRetry();
+
+      expect(viewModel.status, MovieListLoadStatus.error);
+    });
+
     test('genre API failure becomes Error and loads genres again on retry', () async {
       final service = FakeTmdbMovieService()..failGenres = true;
       final viewModel = MovieListViewModel(service);

@@ -2,23 +2,28 @@ import 'package:dio/dio.dart';
 import 'package:flutter/foundation.dart';
 
 class TmdbLoggingInterceptor extends Interceptor {
+  TmdbLoggingInterceptor({this.tag = 'TMDB'});
+
   static const _maxBodyLength = 600;
+
+  /// 로그 접두어입니다. 워크북 백엔드 Client는 'MovieLog'를 넘겨 TMDB 로그와 구분합니다.
+  final String tag;
 
   @override
   void onRequest(RequestOptions options, RequestInterceptorHandler handler) {
-    debugPrint('[TMDB →] ${options.method} ${options.uri}');
-    debugPrint('[TMDB →] query: ${options.queryParameters}');
-    debugPrint('[TMDB →] headers: ${_maskHeaders(options.headers)}');
+    debugPrint('[$tag →] ${options.method} ${options.uri}');
+    debugPrint('[$tag →] query: ${options.queryParameters}');
+    debugPrint('[$tag →] headers: ${_maskHeaders(options.headers)}');
     handler.next(options);
   }
 
   @override
   void onResponse(Response<dynamic> response, ResponseInterceptorHandler handler) {
     debugPrint(
-      '[TMDB ←] ${response.statusCode} ${response.requestOptions.method} '
+      '[$tag ←] ${response.statusCode} ${response.requestOptions.method} '
       '${response.requestOptions.uri}',
     );
-    debugPrint('[TMDB ←] body: ${_truncate(response.data.toString())}');
+    debugPrint('[$tag ←] body: ${_truncate(response.data.toString())}');
     handler.next(response);
   }
 
@@ -26,11 +31,11 @@ class TmdbLoggingInterceptor extends Interceptor {
   void onError(DioException err, ErrorInterceptorHandler handler) {
     final request = err.requestOptions;
     debugPrint(
-      '[TMDB ✕] ${err.response?.statusCode ?? err.type.name} '
+      '[$tag ✕] ${err.response?.statusCode ?? err.type.name} '
       '${request.method} ${request.uri}',
     );
-    debugPrint('[TMDB ✕] query: ${request.queryParameters}');
-    debugPrint('[TMDB ✕] message: ${err.message}');
+    debugPrint('[$tag ✕] query: ${request.queryParameters}');
+    debugPrint('[$tag ✕] message: ${err.message}');
     handler.next(err);
   }
 

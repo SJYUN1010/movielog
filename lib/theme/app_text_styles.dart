@@ -93,33 +93,55 @@ abstract final class AppTextStyles {
     color: AppColors.violet,
   );
 
-  static const fieldLabel = sectionHeading;
+  /// W6 Figma: 하위 화면(회원가입, 내가 등록한 평점)의 앱바 제목은 Manrope 20 / Bold입니다.
+  static const subScreenTitle = TextStyle(
+    fontSize: 20,
+    fontWeight: FontWeight.w700,
+    height: 27 / 20,
+    letterSpacing: 0,
+    color: AppColors.violet,
+  );
+
+  /// W6-01 Figma: 입력창 라벨은 Manrope 14 / Bold입니다.
+  static const fieldLabel = TextStyle(
+    fontSize: 14,
+    fontWeight: FontWeight.w700,
+    height: 19 / 14,
+    letterSpacing: 0,
+    color: AppColors.black,
+  );
 
   static const inputText = TextStyle(
-    fontSize: 16,
+    fontSize: 14,
     fontWeight: FontWeight.w400,
-    height: 1.5,
+    height: 19 / 14,
     letterSpacing: 0,
     color: AppColors.black,
   );
 
   static const inputHint = TextStyle(
-    fontSize: 16,
-    fontWeight: FontWeight.w500,
-    height: 1.5,
+    fontSize: 14,
+    fontWeight: FontWeight.w400,
+    height: 19 / 14,
     letterSpacing: 0,
-    color: AppColors.placeholder,
+    color: AppColors.fieldHint,
   );
 
   static const errorText = TextStyle(
     fontSize: 12,
-    fontWeight: FontWeight.w500,
+    fontWeight: FontWeight.w700,
     height: 16 / 12,
     letterSpacing: 0,
     color: AppColors.error,
   );
 
-  static const checkboxLabel = sectionHeading;
+  static const checkboxLabel = TextStyle(
+    fontSize: 14,
+    fontWeight: FontWeight.w700,
+    height: 19 / 14,
+    letterSpacing: 0,
+    color: AppColors.black,
+  );
 
   static const filledButtonLabel = TextStyle(
     fontSize: 16,

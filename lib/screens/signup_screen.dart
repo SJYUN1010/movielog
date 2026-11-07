@@ -1,12 +1,15 @@
 import 'package:flutter/material.dart';
 import 'package:go_router/go_router.dart';
+import 'package:provider/provider.dart';
 
 import '../signup_validators.dart';
+import '../theme/app_colors.dart';
 import '../theme/app_text_styles.dart';
+import '../view_models/sign_up_view_model.dart';
 import '../widgets/common_app_bar.dart';
 import '../widgets/login_prompt.dart';
+import '../widgets/movielog_button.dart';
 import '../widgets/movielog_text_form_field.dart';
-import '../widgets/submit_button.dart';
 import '../widgets/terms_checkbox.dart';
 
 class SignUpScreen extends StatefulWidget {
@@ -26,10 +29,12 @@ class _SignUpScreenState extends State<SignUpScreen> {
   final _passwordFocusNode = FocusNode();
   bool _agreedToTerms = false;
 
-  bool get _canSubmit =>
+  /// 형식이 맞고, 닉네임·이메일이 서버에서 사용 가능하다고 확인되고, 약관에 동의했을 때만 가입할 수 있습니다.
+  bool _canSubmit(SignUpViewModel viewModel) =>
       SignUpValidators.nickname(_nicknameController.text) == null &&
       SignUpValidators.email(_emailController.text) == null &&
       SignUpValidators.password(_passwordController.text) == null &&
+      viewModel.bothAvailable &&
       _agreedToTerms;
 
   @override
@@ -45,10 +50,19 @@ class _SignUpScreenState extends State<SignUpScreen> {
 
   void _refresh() => setState(() {});
 
+  void _goBack() {
+    if (context.canPop()) {
+      context.pop();
+    } else {
+      context.go('/start');
+    }
+  }
+
   void _submit() {
     final isValid = _formKey.currentState?.validate() ?? false;
     if (!isValid) return;
 
+    // 6주차에는 회원가입 API가 없어 실제 가입 요청은 보내지 않습니다.
     FocusScope.of(context).unfocus();
     context.go('/home');
   }
@@ -56,9 +70,11 @@ class _SignUpScreenState extends State<SignUpScreen> {
   @override
   Widget build(BuildContext context) {
     return Scaffold(
-      appBar: const CommonAppBar(
+      appBar: CommonAppBar(
         title: '회원가입',
         centerTitle: true,
+        onBack: _goBack,
+        titleStyle: AppTextStyles.subScreenTitle,
       ),
       body: SafeArea(
         child: LayoutBuilder(
@@ -74,72 +90,12 @@ class _SignUpScreenState extends State<SignUpScreen> {
                     constraints: BoxConstraints(minHeight: constraints.maxHeight),
                     child: IntrinsicHeight(
                       child: Padding(
-                        padding: const EdgeInsets.fromLTRB(16, 32, 16, 24),
+                        padding: const EdgeInsets.fromLTRB(18, 48, 18, 43),
                         child: Form(
                           key: _formKey,
-                          child: Column(
-                            crossAxisAlignment: CrossAxisAlignment.stretch,
-                            children: [
-                              const Text(
-                                '환영합니다!\n간단한 정보만 입력하고 시작해보세요.',
-                                textAlign: TextAlign.center,
-                                style: AppTextStyles.bodyDescription,
-                              ),
-                              const SizedBox(height: 48),
-                              MovieLogTextFormField(
-                                label: '닉네임',
-                                hint: '닉네임을 입력해주세요',
-                                controller: _nicknameController,
-                                focusNode: _nicknameFocusNode,
-                                validator: SignUpValidators.nickname,
-                                textInputAction: TextInputAction.next,
-                                onChanged: (_) => _refresh(),
-                                onFieldSubmitted: (_) => _emailFocusNode.requestFocus(),
-                              ),
-                              const SizedBox(height: 16),
-                              MovieLogTextFormField(
-                                label: '이메일',
-                                hint: '이메일 주소를 입력해주세요',
-                                controller: _emailController,
-                                focusNode: _emailFocusNode,
-                                validator: SignUpValidators.email,
-                                keyboardType: TextInputType.emailAddress,
-                                textInputAction: TextInputAction.next,
-                                onChanged: (_) => _refresh(),
-                                onFieldSubmitted: (_) => _passwordFocusNode.requestFocus(),
-                              ),
-                              const SizedBox(height: 16),
-                              MovieLogTextFormField(
-                                label: '비밀번호',
-                                hint: '비밀번호를 입력해주세요',
-                                controller: _passwordController,
-                                focusNode: _passwordFocusNode,
-                                validator: SignUpValidators.password,
-                                obscureText: true,
-                                textInputAction: TextInputAction.done,
-                                onChanged: (_) => _refresh(),
-                                onFieldSubmitted: (_) => FocusScope.of(context).unfocus(),
-                              ),
-                              const Spacer(),
-                              const SizedBox(height: 24),
-                              TermsCheckbox(
-                                value: _agreedToTerms,
-                                onChanged: (value) {
-                                  setState(() => _agreedToTerms = value);
-                                },
-                              ),
-                              const SizedBox(height: 24),
-                              SubmitButton(
-                                label: '가입하기',
-                                onPressed: _canSubmit ? _submit : null,
-                              ),
-                              const SizedBox(height: 40),
-                              LoginPrompt(
-                                onLoginPressed: () {
-                                  debugPrint('로그인 링크를 눌렀습니다.');
-                                },
-                              ),
-                            ],
+                          child: Consumer<SignUpViewModel>(
+                            builder: (context, viewModel, _) =>
+                                _buildForm(context, viewModel),
                           ),
                         ),
                       ),
@@ -151,6 +107,155 @@ class _SignUpScreenState extends State<SignUpScreen> {
           },
         ),
       ),
+    );
+  }
+
+  Widget _buildForm(BuildContext context, SignUpViewModel viewModel) {
+    final nicknameStatus = viewModel.nicknameCheckStatus;
+    final emailStatus = viewModel.emailCheckStatus;
+
+    return Column(
+      crossAxisAlignment: CrossAxisAlignment.stretch,
+      children: [
+        const _WelcomeText(),
+        const SizedBox(height: 27),
+        MovieLogTextFormField(
+          label: '닉네임',
+          hint: '닉네임을 입력해주세요',
+          controller: _nicknameController,
+          focusNode: _nicknameFocusNode,
+          validator: SignUpValidators.nickname,
+          textInputAction: TextInputAction.next,
+          serverErrorText: viewModel.nicknameErrorText,
+          reserveMessageSpace: true,
+          showCheckWhenValid: nicknameStatus == CheckStatus.available,
+          statusText: switch (nicknameStatus) {
+            CheckStatus.available => '사용 가능한 닉네임입니다.',
+            CheckStatus.checking => '닉네임 사용 가능 여부를 확인 중입니다.',
+            _ => null,
+          },
+          statusColor: nicknameStatus == CheckStatus.available
+              ? AppColors.success
+              : AppColors.info,
+          onChanged: viewModel.onNicknameChanged,
+          onFieldSubmitted: (_) => _emailFocusNode.requestFocus(),
+          trailing: MovieLogButton(
+            label: '중복 확인',
+            isLoading: nicknameStatus == CheckStatus.checking,
+            onPressed: viewModel.canCheckNickname
+                ? () => viewModel.checkNickname(_nicknameController.text)
+                : null,
+            labelStyle: _checkButtonLabel,
+          ),
+        ),
+        const SizedBox(height: 9),
+        MovieLogTextFormField(
+          label: '이메일',
+          hint: '이메일 주소를 입력해주세요',
+          controller: _emailController,
+          focusNode: _emailFocusNode,
+          validator: SignUpValidators.email,
+          keyboardType: TextInputType.emailAddress,
+          textInputAction: TextInputAction.next,
+          serverErrorText: viewModel.emailErrorText,
+          reserveMessageSpace: true,
+          showCheckWhenValid: emailStatus == CheckStatus.available,
+          statusText: switch (emailStatus) {
+            CheckStatus.available => '사용 가능한 이메일입니다.',
+            CheckStatus.checking => '이메일 사용 가능 여부를 확인 중입니다.',
+            _ => null,
+          },
+          statusColor: emailStatus == CheckStatus.available
+              ? AppColors.success
+              : AppColors.info,
+          onChanged: viewModel.onEmailChanged,
+          onFieldSubmitted: (_) => _passwordFocusNode.requestFocus(),
+          trailing: MovieLogButton(
+            label: '중복 확인',
+            isLoading: emailStatus == CheckStatus.checking,
+            onPressed: viewModel.canCheckEmail
+                ? () => viewModel.checkEmail(_emailController.text)
+                : null,
+            labelStyle: _checkButtonLabel,
+          ),
+        ),
+        const SizedBox(height: 9),
+        MovieLogTextFormField(
+          label: '비밀번호',
+          hint: '비밀번호를 입력해주세요',
+          controller: _passwordController,
+          focusNode: _passwordFocusNode,
+          validator: SignUpValidators.password,
+          obscureText: true,
+          textInputAction: TextInputAction.done,
+          onChanged: (_) => _refresh(),
+          onFieldSubmitted: (_) => FocusScope.of(context).unfocus(),
+        ),
+        const Spacer(),
+        const SizedBox(height: 24),
+        TermsCheckbox(
+          value: _agreedToTerms,
+          onChanged: (value) {
+            setState(() => _agreedToTerms = value);
+          },
+        ),
+        const SizedBox(height: 24),
+        MovieLogButton(
+          label: '가입하기',
+          width: double.infinity,
+          onPressed: _canSubmit(viewModel) ? _submit : null,
+        ),
+        const SizedBox(height: 54),
+        LoginPrompt(
+          onLoginPressed: () {
+            debugPrint('로그인 링크를 눌렀습니다.');
+          },
+        ),
+      ],
+    );
+  }
+
+  // W6-01 Figma: 중복 확인 13 / Bold, 앱바 제목 20 / Bold.
+  static const _checkButtonLabel = TextStyle(
+    fontSize: 13,
+    fontWeight: FontWeight.w700,
+    height: 18 / 13,
+    letterSpacing: 0,
+  );
+}
+
+class _WelcomeText extends StatelessWidget {
+  const _WelcomeText();
+
+  // W6-01 Figma: 제목 16 / Bold, 설명 14 / Regular.
+  static const _titleStyle = TextStyle(
+    fontSize: 16,
+    fontWeight: FontWeight.w700,
+    height: 22 / 16,
+    letterSpacing: 0,
+    color: AppColors.black,
+  );
+
+  static const _descriptionStyle = TextStyle(
+    fontSize: 14,
+    fontWeight: FontWeight.w400,
+    height: 19 / 14,
+    letterSpacing: 0,
+    color: AppColors.black,
+  );
+
+  @override
+  Widget build(BuildContext context) {
+    return const Column(
+      children: [
+        Text('환영합니다!', textAlign: TextAlign.center, style: _titleStyle),
+        SizedBox(height: 3),
+        Text(
+          '간단한 정보만 입력하고 시작해보세요.',
+          textAlign: TextAlign.center,
+          style: _descriptionStyle,
+        ),
+      ],
     );
   }
 }
