@@ -6,7 +6,6 @@ import '../data/models/create_member_request.dart';
 import '../signup_validators.dart';
 import '../theme/app_colors.dart';
 import '../theme/app_text_styles.dart';
-import '../view_models/learning_member_session.dart';
 import '../view_models/sign_up_view_model.dart';
 import '../widgets/common_app_bar.dart';
 import '../widgets/login_prompt.dart';
@@ -60,7 +59,7 @@ class _SignUpScreenState extends State<SignUpScreen> {
     if (context.canPop()) {
       Navigator.of(context).maybePop();
     } else {
-      context.go('/start');
+      context.go('/login');
     }
   }
 
@@ -79,11 +78,18 @@ class _SignUpScreenState extends State<SignUpScreen> {
     );
     if (!mounted) return;
 
-    final memberId = viewModel.createdMemberId;
-    if (viewModel.submitStatus == SubmitStatus.success && memberId != null) {
-      // 가입 결과의 memberId를 학습용 세션에 보관해 이후 평점 요청에 사용합니다.
-      context.read<LearningMemberSession>().setMemberId(memberId);
-      context.go('/movies');
+    if (viewModel.submitStatus == SubmitStatus.success && viewModel.createdMemberId != null) {
+      // v7 회원가입은 토큰을 주지 않습니다. 가입한 계정으로 로그인하도록 안내하고 로그인 화면으로 보냅니다.
+      // memberId는 이후 평점 요청에 쓰지 않습니다(토큰이 회원을 식별합니다).
+      ScaffoldMessenger.of(context)
+        ..clearSnackBars()
+        ..showSnackBar(
+          const SnackBar(
+            behavior: SnackBarBehavior.floating,
+            content: Text('회원가입이 완료됐어요. 로그인해 주세요.'),
+          ),
+        );
+      context.go('/login');
       return;
     }
 
@@ -246,9 +252,7 @@ class _SignUpScreenState extends State<SignUpScreen> {
         ),
         const SizedBox(height: 54),
         LoginPrompt(
-          onLoginPressed: () {
-            debugPrint('로그인 링크를 눌렀습니다.');
-          },
+          onLoginPressed: viewModel.isSubmitting ? () {} : () => context.go('/login'),
         ),
       ],
     );

@@ -1,35 +1,23 @@
-import 'package:dio/dio.dart';
 import 'package:flutter/material.dart';
 import 'package:go_router/go_router.dart';
 import 'package:provider/provider.dart';
 
 import '../data/models/rating_with_movie.dart';
-import '../data/services/rating_api_service.dart';
 import '../theme/app_colors.dart';
 import '../theme/app_text_styles.dart';
 import '../view_models/my_ratings_view_model.dart';
 import '../widgets/common_app_bar.dart';
 import '../widgets/loading_overlay.dart';
 import '../widgets/movie_list_empty.dart';
-import '../widgets/movie_list_error.dart';
-import '../widgets/movie_list_loading.dart';
 import '../widgets/movielog_button.dart';
 import '../widgets/rating_card.dart';
 import '../widgets/rating_delete_dialog.dart';
 import '../widgets/rating_dialog.dart';
-
-/// 쓰기 요청의 DioException을 Dialog가 보여줄 서버 message로 바꿉니다.
-/// 같은 COMMON404라도 수정·삭제에서는 "평점"을 가리키므로 문구를 새로 만들지 않고 서버 message를 씁니다.
-Future<void> _asDialogError(Future<void> Function() action) async {
-  try {
-    await action();
-  } on DioException catch (error) {
-    throw StateError(writeErrorMessage(error));
-  }
-}
+import '../widgets/rating_write_guard.dart';
 
 /// 마이페이지 위에 열리는 자식 화면입니다. 하단 NavigationBar 없이 뒤로가기만 둡니다.
-/// 평점 조회·수정·삭제는 이 화면에서만 합니다.
+/// 이번 로그인 세션에서 등록한 평점의 조회·수정·삭제는 이 화면에서만 합니다.
+/// v7에는 토큰 기반 "내 평점 전체 GET"이 없어, 앱을 다시 켜면 이전 평점을 복원하지 않습니다.
 class MyRatingsScreen extends StatelessWidget {
   const MyRatingsScreen({super.key});
 
@@ -75,24 +63,12 @@ class _Body extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
-    switch (viewModel.status) {
-      case MyRatingsLoadStatus.idle:
-      case MyRatingsLoadStatus.loading:
-        return const MovieListLoading(message: '평점을 불러오는 중이에요...');
-      case MyRatingsLoadStatus.empty:
-        return const MovieListEmpty(message: '등록된 평점이 없습니다.');
-      case MyRatingsLoadStatus.error:
-        // 저장은 성공했는데 GET만 실패한 경우 "조회만 다시 시도"로 안내합니다.
-        final warning = viewModel.refreshWarning;
-        final transient = warning == null && viewModel.message == ratingsLoadFailedMessage;
-        return MovieListError(
-          title: warning ?? viewModel.message ?? ratingsLoadFailedMessage,
-          message: transient ? '네트워크 상태를 확인한 뒤 다시 시도해주세요.' : null,
-          onRetry: context.read<MyRatingsViewModel>().retry,
-        );
-      case MyRatingsLoadStatus.success:
-        return _RatingList(viewModel: viewModel);
+    if (viewModel.isEmpty) {
+      return const MovieListEmpty(
+        message: '이번 로그인에서 등록한 평점이 없습니다.\n영화 상세에서 평점을 남기면 여기에 표시돼요.',
+      );
     }
+    return _RatingList(viewModel: viewModel);
   }
 }
 
@@ -109,13 +85,17 @@ class _RatingList extends StatelessWidget {
 
   Future<void> _edit(BuildContext context, RatingWithMovie entry) async {
     final rating = entry.rating;
+    final viewModel = context.read<MyRatingsViewModel>();
+    final messenger = ScaffoldMessenger.of(context);
     final saved = await RatingDialog.show(
       context,
       title: '평점을 수정해주세요',
       initialScore: rating.score,
       initialComment: rating.comment,
-      onSubmit: (score, comment) => _asDialogError(
-        () => context.read<MyRatingsViewModel>().updateRating(
+      // 400·네트워크 실패는 Dialog 안에, 403·404는 Snackbar로 안내합니다. 401이면 로그인 화면으로 이동합니다.
+      onSubmit: (score, comment) => guardRatingWrite(
+        messenger,
+        () => viewModel.updateRating(
           ratingId: rating.ratingId,
           score: score,
           comment: comment,
@@ -127,11 +107,14 @@ class _RatingList extends StatelessWidget {
   }
 
   Future<void> _delete(BuildContext context, RatingWithMovie entry) async {
+    final viewModel = context.read<MyRatingsViewModel>();
+    final messenger = ScaffoldMessenger.of(context);
     final deleted = await RatingDeleteDialog.show(
       context,
       // 단일 삭제는 삭제하는 동안 Dialog를 유지합니다.
-      onConfirm: () => _asDialogError(
-        () => context.read<MyRatingsViewModel>().deleteRating(entry.rating.ratingId),
+      onConfirm: () => guardRatingWrite(
+        messenger,
+        () => viewModel.deleteRating(entry.rating.ratingId),
       ),
     );
     if (!context.mounted || deleted != true) return;

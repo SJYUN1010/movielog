@@ -1,7 +1,6 @@
 import 'package:flutter_test/flutter_test.dart';
 
 import 'package:movielog/signup_validators.dart';
-import 'package:movielog/view_models/learning_member_session.dart';
 
 void main() {
   group('SignUpValidators.nickname (2~12 characters)', () {
@@ -37,29 +36,6 @@ void main() {
     test('does not trim the password', () {
       expect(SignUpValidators.password('        '), isNotNull);
       expect(SignUpValidators.password(' Passw0rd!'), isNull);
-    });
-  });
-
-  group('LearningMemberSession', () {
-    test('starts without a member and notifies on set and clear', () {
-      final session = LearningMemberSession();
-      var notified = 0;
-      session.addListener(() => notified++);
-
-      expect(session.memberId, isNull);
-      expect(session.hasMember, isFalse);
-
-      session.setMemberId(31);
-      expect(session.memberId, 31);
-      expect(session.hasMember, isTrue);
-
-      session.clear();
-      expect(session.memberId, isNull);
-      expect(notified, 2);
-    });
-
-    test('by default the environment does not preselect a member', () {
-      expect(LearningMemberSession.fromEnvironment().memberId, isNull);
     });
   });
 }

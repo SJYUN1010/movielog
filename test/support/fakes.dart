@@ -1,17 +1,24 @@
 import 'package:dio/dio.dart';
 
+import 'package:movielog/core/storage/token_storage.dart';
 import 'package:movielog/data/dto/tmdb_genre_dto.dart';
 import 'package:movielog/data/dto/tmdb_movie_dto.dart';
 import 'package:movielog/data/dto/tmdb_movie_page_dto.dart';
 import 'package:movielog/data/models/common_response.dart';
 import 'package:movielog/data/models/create_member_request.dart';
+import 'package:movielog/data/models/login_models.dart';
+import 'package:movielog/data/models/member_info.dart';
 import 'package:movielog/data/models/rating_dto.dart';
 import 'package:movielog/data/models/rating_request.dart';
 import 'package:movielog/data/models/sign_up_models.dart';
+import 'package:movielog/data/services/auth_api_service.dart';
+import 'package:movielog/data/services/member_api_service.dart';
 import 'package:movielog/data/services/rating_api_service.dart';
 import 'package:movielog/data/services/sign_up_service.dart';
 import 'package:movielog/data/services/tmdb_movie_service.dart';
+import 'package:movielog/email_preference.dart';
 import 'package:movielog/genre_preference.dart';
+import 'package:movielog/view_models/auth_view_model.dart';
 
 TmdbMovieDto movieDto(
   int id, {
@@ -154,10 +161,10 @@ DioException dioFailure(String path, {int? statusCode, Object? data}) {
   );
 }
 
-/// v6 공통 오류 응답 `{ isSuccess: false, code, message, result: null }`을 가진 실패입니다.
+/// 공통 오류 응답 `{ isSuccess: false, code, message, result: null }`을 가진 실패입니다.
 DioException commonFailure(int statusCode, String code, String message) {
   return dioFailure(
-    '/v6',
+    '/v7',
     statusCode: statusCode,
     data: {'isSuccess': false, 'code': code, 'message': message, 'result': null},
   );
@@ -191,7 +198,7 @@ class FakeSignUpService extends SignUpService {
   Future<bool> checkNickname(String nickname) async {
     nicknameCalls.add(nickname.trim());
     await Future<void>.delayed(delay);
-    if (fail) throw dioFailure('/v6/members/nickname');
+    if (fail) throw dioFailure('/v7/members/nickname');
     return !takenNicknames.contains(nickname.trim());
   }
 
@@ -199,7 +206,7 @@ class FakeSignUpService extends SignUpService {
   Future<bool> checkEmail(String email) async {
     emailCalls.add(email.trim());
     await Future<void>.delayed(delay);
-    if (fail) throw dioFailure('/v6/members/email');
+    if (fail) throw dioFailure('/v7/members/email');
     return !takenEmails.contains(email.trim());
   }
 
@@ -236,25 +243,21 @@ RatingDto ratingDto(
     score: score,
     comment: comment,
     createdAt: DateTime.utc(2026, 10, 31, 3),
+    updatedAt: DateTime.utc(2026, 10, 31, 3),
   );
 }
 
-typedef RatingUpdate = ({int memberId, int ratingId, int score, String? comment});
+typedef RatingUpdate = ({int ratingId, int score, String? comment});
 
-/// 서버 상태를 흉내 내는 평점 서비스입니다. 쓰기 요청이 [ratings]를 바꾸므로 이어지는 GET이 그 결과를 돌려줍니다.
+/// 서버 상태를 흉내 내는 v7 평점 서비스입니다. 쓰기 요청이 응답으로 Rating 객체를 돌려줍니다.
+/// memberId 인자는 없습니다(토큰이 회원을 식별합니다).
 class FakeRatingApiService extends RatingApiService {
   FakeRatingApiService({List<RatingDto>? ratings, this.delay = Duration.zero})
     : ratings = ratings ?? [],
-      super(Dio());
+      super(Dio(), Dio());
 
   List<RatingDto> ratings;
   Duration delay;
-
-  /// GET 실패입니다. null이면 정상입니다.
-  DioException? failure;
-
-  /// 다음 GET N번만 실패시킵니다(쓰기 성공 뒤 재조회 실패를 만들 때 씁니다).
-  int failNextFetches = 0;
 
   DioException? createFailure;
   DioException? updateFailure;
@@ -263,82 +266,70 @@ class FakeRatingApiService extends RatingApiService {
   /// 이 id의 삭제만 실패시킵니다(다중 삭제 일부 실패).
   final failingDeleteIds = <int>{};
 
+  /// 이 id의 삭제만 네트워크 오류로 실패시킵니다(실패 항목이 선택 상태로 남는지 볼 때 씁니다).
+  final networkFailingDeleteIds = <int>{};
+
+  /// 다음 쓰기를 호출하는 동안 실행할 훅입니다(응답이 오기 전에 로그아웃하는 상황을 만들 때 씁니다).
+  Future<void> Function()? beforeResponse;
+
   int _nextRatingId = 100;
 
-  final requestedMemberIds = <int>[];
   final createdRequests = <CreateRatingRequest>[];
   final updates = <RatingUpdate>[];
   final deletedIds = <int>[];
-  int fetchCount = 0;
 
   @override
-  Future<List<RatingDto>> fetchMyRatings(int memberId) async {
-    requestedMemberIds.add(memberId);
-    fetchCount++;
+  Future<RatingDto> createRating(CreateRatingRequest request) async {
     await Future<void>.delayed(delay);
-    if (failNextFetches > 0) {
-      failNextFetches--;
-      throw dioFailure('/v6/members/$memberId/ratings');
-    }
-    final error = failure;
-    if (error != null) throw error;
-    return List<RatingDto>.of(ratings);
-  }
-
-  @override
-  Future<void> createRating({
-    required int memberId,
-    required CreateRatingRequest request,
-  }) async {
-    await Future<void>.delayed(delay);
+    await beforeResponse?.call();
     final error = createFailure;
     if (error != null) throw error;
     createdRequests.add(request);
-    ratings = [
-      RatingDto(
-        ratingId: _nextRatingId++,
-        movieId: request.movieId,
-        score: request.score,
-        comment: request.comment?.trim().isEmpty ?? true ? null : request.comment!.trim(),
-        createdAt: DateTime.utc(2026, 11, 1, 3),
-      ),
-      ...ratings,
-    ];
+    final created = RatingDto(
+      ratingId: _nextRatingId++,
+      movieId: request.movieId,
+      score: request.score,
+      comment: request.comment?.trim().isEmpty ?? true ? null : request.comment!.trim(),
+      createdAt: DateTime.utc(2026, 11, 14, 3),
+      updatedAt: DateTime.utc(2026, 11, 14, 3),
+    );
+    ratings = [created, ...ratings];
+    return created;
   }
 
   @override
-  Future<void> updateRating({
-    required int memberId,
+  Future<RatingDto> updateRating({
     required int ratingId,
     required int score,
     String? comment,
   }) async {
     await Future<void>.delayed(delay);
+    await beforeResponse?.call();
     final error = updateFailure;
     if (error != null) throw error;
-    updates.add((memberId: memberId, ratingId: ratingId, score: score, comment: comment));
-    ratings = [
-      for (final rating in ratings)
-        if (rating.ratingId == ratingId)
-          RatingDto(
-            ratingId: rating.ratingId,
-            movieId: rating.movieId,
-            score: score,
-            comment: comment,
-            createdAt: rating.createdAt,
-          )
-        else
-          rating,
-    ];
+    updates.add((ratingId: ratingId, score: score, comment: comment));
+    final current = ratings.firstWhere((rating) => rating.ratingId == ratingId);
+    final updated = RatingDto(
+      ratingId: current.ratingId,
+      movieId: current.movieId,
+      score: score,
+      comment: comment,
+      createdAt: current.createdAt,
+      updatedAt: DateTime.utc(2026, 11, 14, 4),
+    );
+    ratings = [for (final rating in ratings) rating.ratingId == ratingId ? updated : rating];
+    return updated;
   }
 
   @override
-  Future<void> deleteRating({required int memberId, required int ratingId}) async {
+  Future<void> deleteRating(int ratingId) async {
     await Future<void>.delayed(delay);
+    await beforeResponse?.call();
     final error = deleteFailure;
     if (error != null) throw error;
+    if (networkFailingDeleteIds.contains(ratingId)) throw dioFailure('/v7/ratings/$ratingId');
     if (failingDeleteIds.contains(ratingId)) {
-      throw commonFailure(404, 'COMMON404', '존재하지 않는 평점입니다.');
+      throw commonFailure(404, 'RATING404_1', '해당 평점을 찾을 수 없습니다.');
     }
     deletedIds.add(ratingId);
     ratings = [
@@ -346,4 +337,136 @@ class FakeRatingApiService extends RatingApiService {
         if (rating.ratingId != ratingId) rating,
     ];
   }
+}
+
+/// 테스트용 토큰 저장소입니다. 실제 보안 저장소 대신 메모리에 보관합니다.
+class MemoryTokenStorage implements TokenStorage {
+  MemoryTokenStorage([this.token]);
+
+  String? token;
+  bool failRead = false;
+  bool failWrite = false;
+  bool failDelete = false;
+  int readCount = 0;
+  int deleteCount = 0;
+
+  /// 저장이 끝나기 전에 기다리게 하는 장치입니다.
+  Future<void>? writeGate;
+
+  @override
+  Future<void> saveAccessToken(String token) async {
+    await writeGate;
+    if (failWrite) throw StateError('write failed');
+    this.token = token;
+  }
+
+  @override
+  Future<String?> readAccessToken() async {
+    readCount++;
+    if (failRead) throw StateError('read failed');
+    return token;
+  }
+
+  @override
+  Future<void> deleteAccessToken() async {
+    deleteCount++;
+    if (failDelete) throw StateError('delete failed');
+    token = null;
+  }
+}
+
+MemberInfo memberInfo({
+  String nickname = '무비러버',
+  String email = 'movie@example.com',
+  DateTime? createdAt,
+}) {
+  return MemberInfo(
+    email: email,
+    nickname: nickname,
+    createdAt: createdAt ?? DateTime.utc(2026, 10, 10, 3),
+  );
+}
+
+class FakeAuthApiService extends AuthApiService {
+  FakeAuthApiService() : super(Dio());
+
+  Duration delay = Duration.zero;
+  Object? error;
+  String accessToken = 'secret-token-1';
+  final requests = <LoginRequest>[];
+
+  @override
+  Future<LoginResult> login(LoginRequest request) async {
+    requests.add(request);
+    await Future<void>.delayed(delay);
+    final failure = error;
+    if (failure != null) throw failure;
+    return LoginResult(nickname: '무비러버', accessToken: accessToken);
+  }
+}
+
+class FakeMemberApiService extends MemberApiService {
+  FakeMemberApiService({MemberInfo? member}) : member = member ?? memberInfo(), super(Dio());
+
+  MemberInfo member;
+  Duration delay = Duration.zero;
+
+  /// 다음 GET me가 던질 오류입니다. [failMeTimes]만큼 차례로 던집니다.
+  Object? meError;
+  int failMeTimes = 0;
+  Object? updateError;
+
+  int fetchCount = 0;
+  final nicknames = <String>[];
+
+  @override
+  Future<MemberInfo> fetchMe() async {
+    fetchCount++;
+    await Future<void>.delayed(delay);
+    if (failMeTimes > 0) {
+      failMeTimes--;
+      throw meError!;
+    }
+    return member;
+  }
+
+  @override
+  Future<MemberInfo> updateNickname(String nickname) async {
+    nicknames.add(nickname);
+    await Future<void>.delayed(delay);
+    final failure = updateError;
+    if (failure != null) throw failure;
+    member = memberInfo(nickname: nickname, email: member.email, createdAt: member.createdAt);
+    return member;
+  }
+}
+
+/// 로그인을 마친 AuthViewModel입니다(내 정보는 아직 불러오지 않은 상태).
+Future<AuthViewModel> signedInAuthViewModel({
+  FakeMemberApiService? members,
+  MemoryTokenStorage? storage,
+}) async {
+  final auth = AuthViewModel(
+    FakeAuthApiService(),
+    members ?? FakeMemberApiService(),
+    storage ?? MemoryTokenStorage(),
+  );
+  await auth.login('movie@example.com', 'Umc1234!');
+  return auth;
+}
+
+/// 로그인 화면의 "이메일 저장" 값을 메모리에 보관하는 테스트용 구현입니다.
+class MemoryEmailPreference implements EmailPreference {
+  MemoryEmailPreference([this.email]);
+
+  String? email;
+
+  @override
+  Future<String?> read() async => email;
+
+  @override
+  Future<void> save(String value) async => email = value.trim();
+
+  @override
+  Future<void> clear() async => email = null;
 }

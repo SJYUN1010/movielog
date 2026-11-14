@@ -23,7 +23,8 @@ class TmdbLoggingInterceptor extends Interceptor {
       '[$tag ←] ${response.statusCode} ${response.requestOptions.method} '
       '${response.requestOptions.uri}',
     );
-    debugPrint('[$tag ←] body: ${_truncate(response.data.toString())}');
+    // 로그인 응답의 accessToken처럼 민감한 값은 로그에 남기지 않습니다.
+    debugPrint('[$tag ←] body: ${_truncate(redactSensitive(response.data).toString())}');
     handler.next(response);
   }
 
@@ -46,6 +47,24 @@ class TmdbLoggingInterceptor extends Interceptor {
             ? 'Bearer ****'
             : entry.value,
     };
+  }
+
+  /// 로그에 남기면 안 되는 key입니다. 값은 `****`로 바꿉니다.
+  static const _sensitiveKeys = {'accesstoken', 'refreshtoken', 'token', 'password'};
+
+  /// JSON 응답 안의 토큰·비밀번호 값을 가립니다. 원본 객체는 바꾸지 않습니다.
+  @visibleForTesting
+  static Object? redactSensitive(Object? data) {
+    if (data is Map) {
+      return {
+        for (final entry in data.entries)
+          entry.key: _sensitiveKeys.contains(entry.key.toString().toLowerCase())
+              ? '****'
+              : redactSensitive(entry.value),
+      };
+    }
+    if (data is List) return [for (final item in data) redactSensitive(item)];
+    return data;
   }
 
   String _truncate(String text) {
