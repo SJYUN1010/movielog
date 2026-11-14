@@ -9,7 +9,7 @@ import 'package:movielog/core/network/tmdb_client.dart';
 import 'package:movielog/data/dto/tmdb_movie_dto.dart';
 import 'package:movielog/data/models/check_result.dart';
 import 'package:movielog/data/models/rating_dto.dart';
-import 'package:movielog/data/services/member_check_service.dart';
+import 'package:movielog/data/services/sign_up_service.dart';
 import 'package:movielog/data/services/rating_api_service.dart';
 import 'package:movielog/data/services/tmdb_movie_service.dart';
 
@@ -54,7 +54,7 @@ void main() {
         ..interceptors.add(ApiDelayInterceptor(const Duration(milliseconds: 120)));
       final stopwatch = Stopwatch()..start();
 
-      await MemberCheckService(dio).checkNickname('새닉네임');
+      await SignUpService(dio).checkNickname('새닉네임');
 
       expect(stopwatch.elapsedMilliseconds, greaterThanOrEqualTo(110));
       expect(adapter.requests, hasLength(1));
@@ -65,7 +65,7 @@ void main() {
     });
   });
 
-  group('v5 models', () {
+  group('v5/v6 shared models', () {
     test('CheckResult reads the bare { available } body without a wrapper', () {
       expect(CheckResult.fromJson({'available': true}).available, isTrue);
       expect(CheckResult.fromJson({'available': false}).available, isFalse);
@@ -90,10 +90,10 @@ void main() {
     });
   });
 
-  group('MemberCheckService', () {
+  group('SignUpService', () {
     test('calls the nickname path and percent-encodes Korean text once', () async {
       final adapter = _StubAdapter(200, {'available': false});
-      final service = MemberCheckService(_dio(adapter));
+      final service = SignUpService(_dio(adapter));
 
       final available = await service.checkNickname('  영화광  ');
 
@@ -102,7 +102,7 @@ void main() {
       expect(request.method, 'GET');
       expect(
         request.uri.toString(),
-        'https://workbook.devnoco.com/v5/members/nickname/'
+        'https://workbook.devnoco.com/v6/members/nickname/'
         '${Uri.encodeComponent('영화광')}',
       );
       expect(request.uri.path, contains('%EC%98%81%ED%99%94%EA%B4%91'));
@@ -111,24 +111,24 @@ void main() {
 
     test('encodes @ in the email path', () async {
       final adapter = _StubAdapter(200, {'available': true});
-      final service = MemberCheckService(_dio(adapter));
+      final service = SignUpService(_dio(adapter));
 
       final available = await service.checkEmail('movie@umc.com');
 
       expect(available, isTrue);
-      expect(adapter.requests.single.uri.toString(), endsWith('/v5/members/email/movie%40umc.com'));
+      expect(adapter.requests.single.uri.toString(), endsWith('/v6/members/email/movie%40umc.com'));
     });
 
     test('a failure response surfaces as DioException, not as available: false', () async {
       final adapter = _StubAdapter(500, {'message': 'error', 'statusCode': 500});
-      final service = MemberCheckService(_dio(adapter));
+      final service = SignUpService(_dio(adapter));
 
       expect(service.checkNickname('영화광'), throwsA(isA<DioException>()));
     });
   });
 
   group('RatingApiService', () {
-    test('parses the array body and calls /v5/members/{id}/ratings', () async {
+    test('parses the array body and calls /v6/members/{id}/ratings', () async {
       final adapter = _StubAdapter(200, [
         {
           'ratingId': 2,
@@ -151,7 +151,7 @@ void main() {
 
       final ratings = await service.fetchMyRatings(1);
 
-      expect(adapter.requests.single.uri.path, '/v5/members/1/ratings');
+      expect(adapter.requests.single.uri.path, '/v6/members/1/ratings');
       expect(ratings.map((r) => r.movieId), [680, 13]);
       expect(ratings.last.comment, isNull);
     });
@@ -162,19 +162,30 @@ void main() {
       expect(await service.fetchMyRatings(3), isEmpty);
     });
 
-    test('maps 400, 404 and everything else to different messages', () {
-      expect(writeMyRatingsErrorMessage(dioFailure('/x', statusCode: 400)), contains('형식'));
-      expect(writeMyRatingsErrorMessage(dioFailure('/x', statusCode: 404)), '존재하지 않는 회원입니다.');
-      final network = writeMyRatingsErrorMessage(dioFailure('/x'));
-      expect(network, contains('불러오지 못했습니다'));
-      expect(network, writeMyRatingsErrorMessage(dioFailure('/x', statusCode: 500)));
+    test('shows the server message when the body is a common response, else a fallback', () {
+      expect(
+        writeErrorMessage(commonFailure(404, 'COMMON404', '존재하지 않는 유저입니다.')),
+        '존재하지 않는 유저입니다.',
+      );
+      const fallback = '평점을 불러오지 못했습니다.';
+      expect(writeErrorMessage(dioFailure('/x'), fallback: fallback), fallback);
+      expect(writeErrorMessage(dioFailure('/x', statusCode: 500), fallback: fallback), fallback);
+      // 본문이 공통 응답 모양이 아니면 서버 문구로 착각하지 않고 fallback을 씁니다.
+      expect(
+        writeErrorMessage(
+          dioFailure('/x', statusCode: 400, data: {'message': 'Bad', 'statusCode': 400}),
+          fallback: fallback,
+        ),
+        fallback,
+      );
     });
 
     test('a 404 body is thrown as DioException with the status code', () async {
       final adapter = _StubAdapter(404, {
+        'isSuccess': false,
+        'code': 'COMMON404',
         'message': '존재하지 않는 유저입니다.',
-        'error': 'Not Found',
-        'statusCode': 404,
+        'result': null,
       });
       final service = RatingApiService(_dio(adapter));
 

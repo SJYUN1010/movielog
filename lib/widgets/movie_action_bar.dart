@@ -12,7 +12,8 @@ class MovieActionBar extends StatelessWidget {
 
   final bool isFavorite;
   final VoidCallback onFavoriteToggle;
-  final VoidCallback onRatePressed;
+  /// null이면 "평점 남기기" 버튼을 비활성화합니다(예: 학습용 회원가입 전).
+  final VoidCallback? onRatePressed;
 
   @override
   Widget build(BuildContext context) {
@@ -54,6 +55,8 @@ class MovieActionBar extends StatelessWidget {
                   style: ElevatedButton.styleFrom(
                     backgroundColor: AppColors.violet,
                     foregroundColor: AppColors.white,
+                    disabledBackgroundColor: AppColors.buttonDisabled,
+                    disabledForegroundColor: AppColors.white,
                     minimumSize: const Size.fromHeight(48),
                     shape: RoundedRectangleBorder(
                       borderRadius: BorderRadius.circular(9999),

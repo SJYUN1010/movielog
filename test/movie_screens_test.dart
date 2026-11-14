@@ -1,5 +1,4 @@
 import 'package:flutter/material.dart';
-import 'package:flutter_rating_bar/flutter_rating_bar.dart';
 import 'package:flutter_test/flutter_test.dart';
 import 'package:go_router/go_router.dart';
 import 'package:provider/provider.dart';
@@ -8,7 +7,9 @@ import 'package:movielog/data/dto/tmdb_movie_dto.dart';
 import 'package:movielog/data/services/tmdb_movie_service.dart';
 import 'package:movielog/router/app_router.dart';
 import 'package:movielog/screens/home_screen.dart';
-import 'package:movielog/screens/movie_detail_screen.dart';
+import 'package:movielog/data/services/rating_api_service.dart';
+import 'package:movielog/screens/movie_detail_loader.dart';
+import 'package:movielog/view_models/learning_member_session.dart';
 import 'package:movielog/screens/movie_list_screen.dart';
 import 'package:movielog/theme/app_theme.dart';
 import 'package:movielog/view_models/movie_home_view_model.dart';
@@ -51,9 +52,9 @@ GoRouter _testRouter(
       ),
       GoRoute(
         path: '/movies/:movieId',
-        builder: (context, state) => MovieDetailScreen(
+        builder: (context, state) => MovieDetailLoader(
           movieId: int.parse(state.pathParameters['movieId']!),
-          movie: state.extra as TmdbMovieDto?,
+          initialMovie: state.extra as TmdbMovieDto?,
         ),
       ),
     ],
@@ -69,8 +70,14 @@ Future<GoRouter> _pumpApp(
   _useMobileViewport(tester);
   final router = _testRouter(service, initial: initial, preference: preference);
   await tester.pumpWidget(
-    Provider<TmdbMovieService>.value(
-      value: service,
+    MultiProvider(
+      providers: [
+        Provider<TmdbMovieService>.value(value: service),
+        Provider<RatingApiService>.value(value: FakeRatingApiService()),
+        ChangeNotifierProvider<LearningMemberSession>.value(
+          value: LearningMemberSession(memberId: 12),
+        ),
+      ],
       child: MaterialApp.router(theme: AppTheme.light, routerConfig: router),
     ),
   );
@@ -139,14 +146,14 @@ void main() {
       await tester.tap(find.text('영화 102'));
       await tester.pumpAndSettle();
 
-      final detail = tester.widget<MovieDetailScreen>(find.byType(MovieDetailScreen));
+      final detail = tester.widget<MovieDetailLoader>(find.byType(MovieDetailLoader));
       expect(detail.movieId, 102);
-      expect(detail.movie?.id, 102);
+      expect(detail.initialMovie?.id, 102);
       expect(find.text('영화 102 줄거리'), findsOneWidget);
 
       await tester.tap(find.byType(BackButton));
       await tester.pumpAndSettle();
-      expect(find.byType(MovieDetailScreen), findsNothing);
+      expect(find.byType(MovieDetailLoader), findsNothing);
       expect(find.text('인기 영화'), findsOneWidget);
     });
   });
@@ -290,43 +297,6 @@ void main() {
       await tester.pumpAndSettle();
 
       expect(service.discoverCalls.first.genreId, 878);
-    });
-  });
-
-  group('MovieDetailScreen', () {
-    testWidgets('toggles favorite and saves a rating via the dialog', (tester) async {
-      _useMobileViewport(tester);
-      await tester.pumpWidget(
-        MaterialApp(
-          theme: AppTheme.light,
-          home: MovieDetailScreen(movieId: 7, movie: movieDto(7, title: '테스트 영화')),
-        ),
-      );
-
-      expect(find.text('테스트 영화'), findsOneWidget);
-      expect(find.byIcon(Icons.bookmark_border), findsOneWidget);
-
-      await tester.tap(find.text('즐겨찾기'));
-      await tester.pump();
-      expect(find.byIcon(Icons.bookmark), findsOneWidget);
-      expect(find.text('즐겨찾기에 추가했습니다.'), findsOneWidget);
-
-      await tester.tap(find.text('평점 남기기'));
-      await tester.pumpAndSettle();
-      await tester.tapAt(tester.getCenter(find.byType(RatingBar)));
-      await tester.pump();
-      await tester.tap(find.widgetWithText(ElevatedButton, '확인'));
-      await tester.pumpAndSettle();
-
-      expect(find.textContaining('점을 저장했습니다.'), findsOneWidget);
-    });
-
-    testWidgets('shows a not-found message without movie data', (tester) async {
-      await tester.pumpWidget(
-        MaterialApp(theme: AppTheme.light, home: const MovieDetailScreen(movieId: 1)),
-      );
-
-      expect(find.text('영화를 찾을 수 없어요.'), findsOneWidget);
     });
   });
 

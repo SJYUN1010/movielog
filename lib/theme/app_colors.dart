@@ -16,6 +16,10 @@ abstract final class AppColors {
   static const rowBorder = Color(0xFFD6C9E8);
   static const cardBorder = Color(0xFFD9D3E1);
   static const commentText = Color(0xFF655F6C);
+  static const commentFill = Color(0xFFFAF8FD);
+  static const fieldBorder = Color(0xFFD8D2E0);
+  static const editFill = Color(0xFFF0EAF8);
+  static const deleteFill = Color(0xFFFFF2F0);
   static const placeholder = Color(0xFF7A7582);
   static const fieldHint = Color(0xFF8A8391);
   static const error = Color(0xFFB3261E);

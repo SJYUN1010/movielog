@@ -4,4 +4,7 @@
          to allow setting breakpoints, to provide hot reload, etc.
     -->
     <uses-permission android:name="android.permission.INTERNET"/>
+    <!-- 쓰기 요청(회원가입·평점 등록/수정/삭제)을 실제 서버로 보내지 않고 화면 흐름만 확인할 때
+         로컬 개발 서버(http://localhost)에 연결하려고 디버그 빌드에서만 HTTP를 허용합니다. -->
+    <application android:usesCleartextTraffic="true"/>
 </manifest>
