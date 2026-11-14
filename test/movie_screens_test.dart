@@ -4,12 +4,14 @@ import 'package:go_router/go_router.dart';
 import 'package:provider/provider.dart';
 
 import 'package:movielog/data/dto/tmdb_movie_dto.dart';
+import 'package:movielog/email_preference.dart';
 import 'package:movielog/data/services/tmdb_movie_service.dart';
 import 'package:movielog/router/app_router.dart';
 import 'package:movielog/screens/home_screen.dart';
 import 'package:movielog/data/services/rating_api_service.dart';
 import 'package:movielog/screens/movie_detail_loader.dart';
-import 'package:movielog/view_models/learning_member_session.dart';
+import 'package:movielog/view_models/auth_view_model.dart';
+import 'package:movielog/view_models/my_ratings_view_model.dart';
 import 'package:movielog/screens/movie_list_screen.dart';
 import 'package:movielog/theme/app_theme.dart';
 import 'package:movielog/view_models/movie_home_view_model.dart';
@@ -69,13 +71,16 @@ Future<GoRouter> _pumpApp(
 }) async {
   _useMobileViewport(tester);
   final router = _testRouter(service, initial: initial, preference: preference);
+  final auth = (await tester.runAsync(signedInAuthViewModel))!;
+  final ratings = FakeRatingApiService();
   await tester.pumpWidget(
     MultiProvider(
       providers: [
         Provider<TmdbMovieService>.value(value: service),
-        Provider<RatingApiService>.value(value: FakeRatingApiService()),
-        ChangeNotifierProvider<LearningMemberSession>.value(
-          value: LearningMemberSession(memberId: 12),
+        Provider<RatingApiService>.value(value: ratings),
+        ChangeNotifierProvider<AuthViewModel>.value(value: auth),
+        ChangeNotifierProvider<MyRatingsViewModel>.value(
+          value: MyRatingsViewModel(ratings, service, auth),
         ),
       ],
       child: MaterialApp.router(theme: AppTheme.light, routerConfig: router),
@@ -304,21 +309,98 @@ void main() {
     testWidgets('the real router builds Home from the provided service', (tester) async {
       _useMobileViewport(tester);
       final service = FakeTmdbMovieService(popular: [movieDto(1, title: '실제 라우터')]);
+      final auth = (await tester.runAsync(signedInAuthViewModel))!;
+      final router = AppRouter.createRouter(auth);
+      addTearDown(router.dispose);
 
       await tester.pumpWidget(
-        Provider<TmdbMovieService>.value(
-          value: service,
-          child: MaterialApp.router(
-            theme: AppTheme.light,
-            routerConfig: AppRouter.router,
-          ),
+        MultiProvider(
+          providers: [
+            Provider<TmdbMovieService>.value(value: service),
+            ChangeNotifierProvider<AuthViewModel>.value(value: auth),
+          ],
+          child: MaterialApp.router(theme: AppTheme.light, routerConfig: router),
         ),
       );
-      AppRouter.router.go('/home');
       await tester.pumpAndSettle();
 
+      // 로그인된 상태라 시작 화면(/start)에서 홈으로 보내집니다. 내 정보는 MainScreen이 한 번 불러옵니다.
       expect(find.text('실제 라우터'), findsWidgets);
       expect(find.text('홈'), findsWidgets);
+      expect(auth.member?.nickname, '무비러버');
+    });
+
+    testWidgets('a signed out user is sent to the login screen from a protected path', (tester) async {
+      _useMobileViewport(tester);
+      final service = FakeTmdbMovieService();
+      final auth = AuthViewModel(FakeAuthApiService(), FakeMemberApiService(), MemoryTokenStorage());
+      await tester.runAsync(auth.restoreSession); // 토큰 없음 → signedOut
+      final router = AppRouter.createRouter(auth);
+      addTearDown(router.dispose);
+
+      await tester.pumpWidget(
+        MultiProvider(
+          providers: [
+            Provider<TmdbMovieService>.value(value: service),
+            ChangeNotifierProvider<AuthViewModel>.value(value: auth),
+            Provider<EmailPreference>.value(value: MemoryEmailPreference()),
+          ],
+          child: MaterialApp.router(theme: AppTheme.light, routerConfig: router),
+        ),
+      );
+      router.go('/my');
+      await tester.pumpAndSettle();
+
+      expect(find.text('MovieLog에 로그인'), findsOneWidget);
+      expect(find.text('내 프로필'), findsNothing);
+    });
+
+    testWidgets('a 401 while the rating Dialog is saving ends on the login screen without a blank screen', (
+      tester,
+    ) async {
+      // 회귀 테스트: 만료로 Router가 먼저 페이지를 교체한 뒤 Dialog가 pop을 다시 부르면
+      // 남은 마지막 페이지가 닫혀 "no pages left to show" 오류와 빈 화면이 생겼습니다.
+      _useMobileViewport(tester);
+      final service = FakeTmdbMovieService()..movieDetails[550] = movieDto(550, title: '파이트 클럽');
+      final ratings = FakeRatingApiService(delay: const Duration(milliseconds: 40))
+        ..createFailure = commonFailure(401, 'AUTH401_4', '토큰이 만료되었습니다. 다시 로그인해주세요.');
+      final storage = MemoryTokenStorage();
+      final auth = (await tester.runAsync(() => signedInAuthViewModel(storage: storage)))!;
+      final router = AppRouter.createRouter(auth);
+      addTearDown(router.dispose);
+
+      await tester.pumpWidget(
+        MultiProvider(
+          providers: [
+            Provider<TmdbMovieService>.value(value: service),
+            Provider<RatingApiService>.value(value: ratings),
+            ChangeNotifierProvider<AuthViewModel>.value(value: auth),
+            ChangeNotifierProvider<MyRatingsViewModel>.value(
+              value: MyRatingsViewModel(ratings, service, auth),
+            ),
+            Provider<EmailPreference>.value(value: MemoryEmailPreference()),
+          ],
+          child: MaterialApp.router(theme: AppTheme.light, routerConfig: router),
+        ),
+      );
+      await tester.pumpAndSettle();
+      router.go('/movies/550');
+      await tester.pumpAndSettle();
+
+      await tester.tap(find.text('평점 남기기'));
+      await tester.pumpAndSettle();
+      await tester.tap(find.byIcon(Icons.star_border).at(3));
+      await tester.pump();
+      await tester.tap(find.widgetWithText(ElevatedButton, '확인'));
+      await tester.pump(const Duration(milliseconds: 60)); // 응답(401)이 도착합니다.
+      await tester.pumpAndSettle();
+
+      expect(tester.takeException(), isNull);
+      expect(auth.status, AuthStatus.signedOut);
+      expect(storage.token, isNull);
+      expect(find.text('MovieLog에 로그인'), findsOneWidget);
+      expect(find.text('로그인이 만료됐어요. 다시 로그인해 주세요.'), findsOneWidget);
+      expect(find.text('평점을 등록했습니다'), findsNothing);
     });
   });
 }

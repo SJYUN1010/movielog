@@ -4,6 +4,7 @@ import '../data/models/rating_request.dart';
 import '../theme/app_colors.dart';
 import 'movie_rating_input.dart';
 import 'movielog_button.dart';
+import 'rating_write_guard.dart';
 
 /// 별점과 코멘트를 입력받아 저장까지 마치는 Dialog입니다. 등록과 수정에 같이 씁니다.
 ///
@@ -85,10 +86,15 @@ class _RatingDialogState extends State<RatingDialog> {
     try {
       await widget.onSubmit(score, trimmed.isEmpty ? null : trimmed);
       if (!mounted) return;
-      Navigator.of(context).pop(true);
+      popDialogIfActive(context, true);
     } catch (error) {
       // 실패해도 입력(별점·코멘트)은 그대로 두고, 버튼이 로딩 상태로 남지 않게 풉니다.
       if (!mounted) return;
+      if (error is RatingDialogDismiss) {
+        // 403·409처럼 Snackbar로 안내하거나 세션이 만료된 경우에는 Dialog를 닫습니다.
+        popDialogIfActive(context, false);
+        return;
+      }
       setState(() {
         _isSubmitting = false;
         _errorMessage = error is StateError ? error.message : '저장에 실패했습니다.';

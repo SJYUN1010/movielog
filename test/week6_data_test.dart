@@ -19,7 +19,7 @@ class _StubAdapter implements HttpClientAdapter {
   _StubAdapter(this.status, this.body);
 
   final int status;
-  final Object body;
+  final Object? body;
   final requests = <RequestOptions>[];
 
   @override
@@ -65,7 +65,7 @@ void main() {
     });
   });
 
-  group('v5/v6 shared models', () {
+  group('v5-v7 shared models', () {
     test('CheckResult reads the bare { available } body without a wrapper', () {
       expect(CheckResult.fromJson({'available': true}).available, isTrue);
       expect(CheckResult.fromJson({'available': false}).available, isFalse);
@@ -102,7 +102,7 @@ void main() {
       expect(request.method, 'GET');
       expect(
         request.uri.toString(),
-        'https://workbook.devnoco.com/v6/members/nickname/'
+        'https://workbook.devnoco.com/v7/members/nickname/'
         '${Uri.encodeComponent('영화광')}',
       );
       expect(request.uri.path, contains('%EC%98%81%ED%99%94%EA%B4%91'));
@@ -116,7 +116,7 @@ void main() {
       final available = await service.checkEmail('movie@umc.com');
 
       expect(available, isTrue);
-      expect(adapter.requests.single.uri.toString(), endsWith('/v6/members/email/movie%40umc.com'));
+      expect(adapter.requests.single.uri.toString(), endsWith('/v7/members/email/movie%40umc.com'));
     });
 
     test('a failure response surfaces as DioException, not as available: false', () async {
@@ -127,9 +127,9 @@ void main() {
     });
   });
 
-  group('RatingApiService', () {
-    test('parses the array body and calls /v6/members/{id}/ratings', () async {
-      final adapter = _StubAdapter(200, [
+  group('RatingApiService (public read)', () {
+    test('parses the array body and calls /v7/members/{id}/ratings with the public client', () async {
+      final publicAdapter = _StubAdapter(200, [
         {
           'ratingId': 2,
           'movieId': 680,
@@ -147,25 +147,27 @@ void main() {
           'updatedAt': '2026-10-31T19:00:27.994Z',
         },
       ]);
-      final service = RatingApiService(_dio(adapter));
+      final authAdapter = _StubAdapter(200, <dynamic>[]);
+      final service = RatingApiService(_dio(publicAdapter), _dio(authAdapter));
 
-      final ratings = await service.fetchMyRatings(1);
+      final ratings = await service.fetchMemberRatings(1);
 
-      expect(adapter.requests.single.uri.path, '/v6/members/1/ratings');
+      expect(publicAdapter.requests.single.uri.path, '/v7/members/1/ratings');
+      expect(authAdapter.requests, isEmpty); // 공개 조회는 보호용 Client를 쓰지 않습니다.
       expect(ratings.map((r) => r.movieId), [680, 13]);
       expect(ratings.last.comment, isNull);
     });
 
     test('an empty array is an empty list, not a failure', () async {
-      final service = RatingApiService(_dio(_StubAdapter(200, <dynamic>[])));
+      final service = RatingApiService(_dio(_StubAdapter(200, <dynamic>[])), _dio(_StubAdapter(200, null)));
 
-      expect(await service.fetchMyRatings(3), isEmpty);
+      expect(await service.fetchMemberRatings(3), isEmpty);
     });
 
     test('shows the server message when the body is a common response, else a fallback', () {
       expect(
-        writeErrorMessage(commonFailure(404, 'COMMON404', '존재하지 않는 유저입니다.')),
-        '존재하지 않는 유저입니다.',
+        writeErrorMessage(commonFailure(404, 'MEMBER404_1', '해당 회원을 찾을 수 없습니다.')),
+        '해당 회원을 찾을 수 없습니다.',
       );
       const fallback = '평점을 불러오지 못했습니다.';
       expect(writeErrorMessage(dioFailure('/x'), fallback: fallback), fallback);
@@ -173,7 +175,7 @@ void main() {
       // 본문이 공통 응답 모양이 아니면 서버 문구로 착각하지 않고 fallback을 씁니다.
       expect(
         writeErrorMessage(
-          dioFailure('/x', statusCode: 400, data: {'message': 'Bad', 'statusCode': 400}),
+          dioFailure('/x', statusCode: 400, data: {'message': 3, 'statusCode': 400}),
           fallback: fallback,
         ),
         fallback,
@@ -183,14 +185,14 @@ void main() {
     test('a 404 body is thrown as DioException with the status code', () async {
       final adapter = _StubAdapter(404, {
         'isSuccess': false,
-        'code': 'COMMON404',
-        'message': '존재하지 않는 유저입니다.',
+        'code': 'MEMBER404_1',
+        'message': '해당 회원을 찾을 수 없습니다.',
         'result': null,
       });
-      final service = RatingApiService(_dio(adapter));
+      final service = RatingApiService(_dio(adapter), _dio(_StubAdapter(200, null)));
 
       await expectLater(
-        service.fetchMyRatings(999999),
+        service.fetchMemberRatings(999999),
         throwsA(
           isA<DioException>().having((e) => e.response?.statusCode, 'status', 404),
         ),
