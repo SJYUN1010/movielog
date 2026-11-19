@@ -6,7 +6,6 @@ import 'package:provider/provider.dart';
 import 'package:movielog/screens/signup_screen.dart';
 import 'package:movielog/theme/app_colors.dart';
 import 'package:movielog/theme/app_theme.dart';
-import 'package:movielog/view_models/learning_member_session.dart';
 import 'package:movielog/view_models/sign_up_view_model.dart';
 import 'package:movielog/widgets/movielog_button.dart';
 
@@ -212,13 +211,12 @@ void main() {
     });
   });
 
-  group('SignUpScreen submit (v6)', () {
-    Future<LearningMemberSession> pumpWithRouter(
+  group('SignUpScreen submit (v7)', () {
+    Future<void> pumpWithRouter(
       WidgetTester tester,
       FakeSignUpService service,
     ) async {
       _useMobileViewport(tester);
-      final session = LearningMemberSession();
       final router = GoRouter(
         initialLocation: '/signup',
         routes: [
@@ -229,17 +227,10 @@ void main() {
               child: const SignUpScreen(),
             ),
           ),
-          GoRoute(path: '/movies', builder: (context, state) => const Scaffold(body: Text('영화 목록 화면'))),
-          GoRoute(path: '/start', builder: (context, state) => const Scaffold(body: Text('시작 화면'))),
+          GoRoute(path: '/login', builder: (context, state) => const Scaffold(body: Text('로그인 화면'))),
         ],
       );
-      await tester.pumpWidget(
-        ChangeNotifierProvider<LearningMemberSession>.value(
-          value: session,
-          child: MaterialApp.router(theme: AppTheme.light, routerConfig: router),
-        ),
-      );
-      return session;
+      await tester.pumpWidget(MaterialApp.router(theme: AppTheme.light, routerConfig: router));
     }
 
     Future<void> fillAndCheckAll(WidgetTester tester) async {
@@ -252,9 +243,9 @@ void main() {
       await tester.pumpAndSettle();
     }
 
-    testWidgets('a successful sign up stores the memberId and goes to /movies', (tester) async {
+    testWidgets('a successful sign up goes to the login screen with a notice (v7 gives no token)', (tester) async {
       final service = FakeSignUpService()..nextMemberId = 31;
-      final session = await pumpWithRouter(tester, service);
+      await pumpWithRouter(tester, service);
       await fillAndCheckAll(tester);
 
       await tester.tap(_submit);
@@ -262,14 +253,14 @@ void main() {
 
       expect(service.signUpRequests, hasLength(1));
       expect(service.signUpRequests.single.nickname, '새닉네임');
-      expect(session.memberId, 31);
-      expect(find.text('영화 목록 화면'), findsOneWidget);
+      expect(find.text('로그인 화면'), findsOneWidget);
+      expect(find.text('회원가입이 완료됐어요. 로그인해 주세요.'), findsOneWidget);
     });
 
     testWidgets('a final 409 is shown in a Snackbar and the screen stays', (tester) async {
       final service = FakeSignUpService()
         ..signUpError = commonFailure(409, 'COMMON409', '이미 사용 중인 이메일입니다.');
-      final session = await pumpWithRouter(tester, service);
+      await pumpWithRouter(tester, service);
       await fillAndCheckAll(tester);
 
       await tester.tap(_submit);
@@ -277,8 +268,7 @@ void main() {
 
       expect(find.text('이미 사용 중인 이메일입니다.'), findsOneWidget); // Snackbar
       expect(find.byType(SnackBar), findsOneWidget);
-      expect(session.memberId, isNull);
-      expect(find.text('영화 목록 화면'), findsNothing);
+      expect(find.text('로그인 화면'), findsNothing);
       expect(find.text('환영합니다!'), findsOneWidget);
     });
 
@@ -325,16 +315,16 @@ void main() {
       await tester.binding.handlePopRoute();
       await tester.tap(find.byTooltip('뒤로가기'));
       await tester.pump();
-      expect(find.text('시작 화면'), findsNothing);
+      expect(find.text('로그인 화면'), findsNothing);
       expect(find.text('환영합니다!'), findsOneWidget);
 
       await tester.pump(const Duration(milliseconds: 400));
       await tester.pumpAndSettle();
-      expect(find.text('영화 목록 화면'), findsOneWidget);
+      expect(find.text('로그인 화면'), findsOneWidget);
     });
 
     testWidgets('after a failed submit the screen can be left again', (tester) async {
-      final service = FakeSignUpService()..signUpError = dioFailure('/v6/members');
+      final service = FakeSignUpService()..signUpError = dioFailure('/v7/members');
       await pumpWithRouter(tester, service);
       await fillAndCheckAll(tester);
       await tester.tap(_submit);
@@ -343,7 +333,7 @@ void main() {
       await tester.tap(find.byTooltip('뒤로가기'));
       await tester.pumpAndSettle();
 
-      expect(find.text('시작 화면'), findsOneWidget);
+      expect(find.text('로그인 화면'), findsOneWidget);
     });
   });
 }

@@ -2,6 +2,7 @@ import 'package:flutter/material.dart';
 
 import '../theme/app_colors.dart';
 import 'movielog_button.dart';
+import 'rating_write_guard.dart';
 
 /// 평점 삭제 확인 Dialog입니다. 되돌릴 수 없는 동작이라 확인 없이 바로 실행하지 않습니다.
 ///
@@ -49,9 +50,13 @@ class _RatingDeleteDialogState extends State<RatingDeleteDialog> {
     try {
       await onConfirm();
       if (!mounted) return;
-      Navigator.of(context).pop(true);
+      popDialogIfActive(context, true);
     } catch (error) {
       if (!mounted) return;
+      if (error is RatingDialogDismiss) {
+        popDialogIfActive(context, false);
+        return;
+      }
       setState(() {
         _isDeleting = false;
         _errorMessage = error is StateError ? error.message : '삭제에 실패했습니다.';

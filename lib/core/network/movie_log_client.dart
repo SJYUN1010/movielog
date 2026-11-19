@@ -1,6 +1,8 @@
 import 'package:dio/dio.dart';
 import 'package:flutter/foundation.dart';
 
+import '../storage/token_storage.dart';
+import 'auth_interceptor.dart';
 import 'tmdb_logging_interceptor.dart';
 
 /// 워크북 백엔드 주소입니다. 서버에 쓰기 요청을 보내지 않고 화면 흐름만 확인할 때
@@ -30,31 +32,55 @@ class ApiDelayInterceptor extends Interceptor {
   }
 }
 
-/// 워크북 자체 백엔드(/v6)용 Client입니다. TMDB Client와 baseUrl, 헤더가 달라 합치지 않습니다.
-/// 요청 body(비밀번호 포함)는 로그에 남기지 않습니다.
-Dio createMovieLogClient({Dio? dio}) {
-  final client =
-      dio ??
-      Dio(
-        BaseOptions(
-          baseUrl: movieLogBaseUrl,
-          connectTimeout: const Duration(seconds: 10),
-          receiveTimeout: const Duration(seconds: 10),
-          headers: {'accept': 'application/json'},
-        ),
-      );
-  if (kDebugMode) {
-    if (apiDelayMs > 0) {
-      client.interceptors.add(ApiDelayInterceptor(Duration(milliseconds: apiDelayMs)));
-    }
-    client.interceptors.add(TmdbLoggingInterceptor(tag: 'MovieLog'));
+Dio _newDio() {
+  return Dio(
+    BaseOptions(
+      baseUrl: movieLogBaseUrl,
+      connectTimeout: const Duration(seconds: 10),
+      receiveTimeout: const Duration(seconds: 10),
+      headers: {'accept': 'application/json'},
+    ),
+  );
+}
+
+void _addDebugInterceptors(Dio client) {
+  if (!kDebugMode) return;
+  if (apiDelayMs > 0) {
+    client.interceptors.add(ApiDelayInterceptor(Duration(milliseconds: apiDelayMs)));
   }
+  // 로깅은 인증 Interceptor 뒤에 둡니다. Authorization 값은 로그에서 ****로 가려집니다.
+  client.interceptors.add(TmdbLoggingInterceptor(tag: 'MovieLog'));
+}
+
+/// 공개 요청용 Client입니다(로그인, 회원가입, 중복 확인, 유저별 평점 조회). 토큰을 붙이지 않습니다.
+/// TMDB Client와 baseUrl, 헤더가 달라 합치지 않습니다. 요청 body(비밀번호 포함)는 로그에 남기지 않습니다.
+Dio createMovieLogClient({Dio? dio}) {
+  final client = dio ?? _newDio();
+  _addDebugInterceptors(client);
   return client;
 }
 
-/// Provider로 앱 전체에 한 번만 등록해 서비스들이 같은 Dio를 공유합니다.
+/// 보호 요청용 Client입니다(내 정보, 평점 등록·수정·삭제). [AuthInterceptor]가 Bearer 토큰을 붙입니다.
+Dio createAuthMovieLogClient(TokenStorage storage, {Dio? dio}) {
+  final client = dio ?? _newDio();
+  client.interceptors.add(
+    AuthInterceptor(storage, protectedHost: Uri.parse(client.options.baseUrl).host),
+  );
+  _addDebugInterceptors(client);
+  return client;
+}
+
+/// Provider로 앱 전체에 한 번만 등록해 서비스들이 같은 공개용 Dio를 공유합니다.
 class MovieLogClient {
   MovieLogClient({Dio? dio}) : dio = createMovieLogClient(dio: dio);
+
+  final Dio dio;
+}
+
+/// 토큰이 필요한 요청 전용 Client입니다. 공개용 [MovieLogClient]와 합치지 않습니다.
+class AuthMovieLogClient {
+  AuthMovieLogClient(TokenStorage storage, {Dio? dio})
+    : dio = createAuthMovieLogClient(storage, dio: dio);
 
   final Dio dio;
 }

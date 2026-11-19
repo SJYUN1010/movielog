@@ -5,15 +5,16 @@ import '../data/dto/tmdb_movie_dto.dart';
 import '../data/services/rating_api_service.dart';
 import '../data/services/tmdb_movie_service.dart';
 import '../theme/app_text_styles.dart';
-import '../view_models/learning_member_session.dart';
+import '../view_models/auth_view_model.dart';
 import '../view_models/movie_detail_view_model.dart';
+import '../view_models/my_ratings_view_model.dart';
 import '../widgets/movielog_button.dart';
 import 'movie_detail_screen.dart';
 
 /// 영화 상세 화면의 시작점입니다.
 ///
 /// 목록에서 들어오면 `state.extra`로 받은 DTO를 그대로 쓰고, 직접 접근·Deep Link처럼 extra가 없으면
-/// TMDB `GET /movie/{id}`로 다시 조회합니다. 로딩이 끝나면 영화와 학습용 회원 id를 가진
+/// TMDB `GET /movie/{id}`로 다시 조회합니다. 로딩이 끝나면 영화를 가진
 /// [MovieDetailViewModel]을 이 화면 아래에 제공합니다.
 class MovieDetailLoader extends StatefulWidget {
   const MovieDetailLoader({super.key, required this.movieId, this.initialMovie});
@@ -48,8 +49,8 @@ class _MovieDetailLoaderState extends State<MovieDetailLoader> {
 
   @override
   Widget build(BuildContext context) {
-    // 가입으로 학습용 회원이 바뀌면 ViewModel을 새로 만듭니다.
-    final memberId = context.watch<LearningMemberSession>().memberId;
+    // 로그인 세션이 바뀌면(로그아웃 후 다른 계정 등) ViewModel을 새로 만듭니다.
+    final sessionVersion = context.select<AuthViewModel, int>((auth) => auth.sessionVersion);
 
     return FutureBuilder<TmdbMovieDto?>(
       future: _movieFuture, // build마다 새 Future를 만들지 않습니다.
@@ -68,10 +69,11 @@ class _MovieDetailLoaderState extends State<MovieDetailLoader> {
           return const _Message(text: '영화를 찾을 수 없어요.');
         }
         return ChangeNotifierProvider<MovieDetailViewModel>(
-          key: ValueKey(memberId),
+          key: ValueKey(sessionVersion),
           create: (context) => MovieDetailViewModel(
             context.read<RatingApiService>(),
-            memberId,
+            context.read<AuthViewModel>(),
+            context.read<MyRatingsViewModel>(),
             movie,
           ),
           child: const MovieDetailScreen(),

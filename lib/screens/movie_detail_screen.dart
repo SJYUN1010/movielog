@@ -1,5 +1,4 @@
 import 'package:flutter/material.dart';
-import 'package:go_router/go_router.dart';
 import 'package:provider/provider.dart';
 
 import '../theme/app_colors.dart';
@@ -7,10 +6,11 @@ import '../theme/app_text_styles.dart';
 import '../view_models/movie_detail_view_model.dart';
 import '../widgets/movie_action_bar.dart';
 import '../widgets/rating_dialog.dart';
+import '../widgets/rating_write_guard.dart';
 import '../widgets/tmdb_poster_image.dart';
 
-/// 영화 상세 화면입니다. 영화 정보와 학습용 회원 id는 [MovieDetailViewModel]에서 읽습니다.
-/// 이 화면에서는 평점 등록만 하고, 조회·수정·삭제는 마이페이지의 "내가 등록한 평점"에서 합니다.
+/// 영화 상세 화면입니다. 영화 정보는 [MovieDetailViewModel]에서 읽습니다.
+/// 이 화면에서는 평점 등록만 하고(로그인 토큰으로 요청), 조회·수정·삭제는 마이페이지의 "내가 등록한 평점"에서 합니다.
 class MovieDetailScreen extends StatefulWidget {
   const MovieDetailScreen({super.key});
 
@@ -35,15 +35,15 @@ class _MovieDetailScreenState extends State<MovieDetailScreen> {
   }
 
   Future<void> _openRatingDialog() async {
+    final viewModel = context.read<MovieDetailViewModel>();
+    final messenger = ScaffoldMessenger.of(context);
     final saved = await RatingDialog.show(
       context,
-      onSubmit: (score, comment) async {
-        final viewModel = context.read<MovieDetailViewModel>();
-        await viewModel.createRating(score: score, comment: comment);
-        if (viewModel.submitStatus != SubmitStatus.success) {
-          throw StateError(viewModel.submitMessage ?? '저장에 실패했습니다.');
-        }
-      },
+      // 400·네트워크 실패는 Dialog 안에, 409(이미 등록)·403·404는 Snackbar로 안내합니다.
+      onSubmit: (score, comment) => guardRatingWrite(
+        messenger,
+        () => viewModel.createRating(score: score, comment: comment),
+      ),
     );
 
     // 저장 요청과 Snackbar 표시는 서로 다른 비동기 경계라 await 뒤에 mounted를 다시 확인합니다.
@@ -115,10 +115,6 @@ class _MovieDetailScreenState extends State<MovieDetailScreen> {
                       ],
                     ),
                   ],
-                  if (!viewModel.canRate) ...[
-                    const SizedBox(height: 24),
-                    const _SignUpNotice(),
-                  ],
                 ],
               ),
             ),
@@ -128,32 +124,8 @@ class _MovieDetailScreenState extends State<MovieDetailScreen> {
       bottomNavigationBar: MovieActionBar(
         isFavorite: _isFavorite,
         onFavoriteToggle: _toggleFavorite,
-        // 회원가입 결과의 memberId가 없으면 등록 버튼을 비활성화합니다.
-        onRatePressed: viewModel.canRate ? _openRatingDialog : null,
+        onRatePressed: _openRatingDialog,
       ),
-    );
-  }
-}
-
-/// 학습용 회원이 없을 때 평점 등록 대신 회원가입을 안내합니다.
-class _SignUpNotice extends StatelessWidget {
-  const _SignUpNotice();
-
-  @override
-  Widget build(BuildContext context) {
-    return Row(
-      children: [
-        const Expanded(
-          child: Text(
-            '평점을 남기려면 학습용 회원가입이 필요합니다.',
-            style: AppTextStyles.statLabel,
-          ),
-        ),
-        TextButton(
-          onPressed: () => context.push('/signup'),
-          child: const Text('회원가입하기', style: AppTextStyles.linkText),
-        ),
-      ],
     );
   }
 }
