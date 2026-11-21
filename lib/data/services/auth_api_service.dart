@@ -11,7 +11,7 @@ class AuthApiService {
   /// 401 AUTH401_1(이메일·비밀번호 불일치)은 로그인 Form 오류이고 세션 만료가 아닙니다.
   Future<LoginResult> login(LoginRequest request) async {
     final response = await _publicDio.post<dynamic>(
-      '/v7/auth/login',
+      '/v8/auth/login',
       data: request.toJson(),
     );
     return parseLoginResult(response.data);

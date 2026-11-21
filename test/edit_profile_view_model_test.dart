@@ -79,7 +79,7 @@ void main() {
   test('a network failure is a retryable snackbar message and does not sign out', () async {
     final h = _Harness();
     await h.signIn();
-    h.members.updateError = dioFailure('/v7/members/me');
+    h.members.updateError = dioFailure('/v8/members/me');
 
     expect(await h.viewModel.save('새닉네임'), isFalse);
 

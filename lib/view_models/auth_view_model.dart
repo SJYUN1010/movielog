@@ -63,7 +63,7 @@ class AuthViewModel extends ChangeNotifier {
     if (!_disposed) notifyListeners();
   }
 
-  /// 앱 시작 시 저장된 토큰을 읽고 `GET /v7/members/me`로 서버 검증을 마친 뒤에만 signedIn이 됩니다.
+  /// 앱 시작 시 저장된 토큰을 읽고 `GET /v8/members/me`로 서버 검증을 마친 뒤에만 signedIn이 됩니다.
   /// 토큰 문자열이 존재한다는 이유만으로 로그인 상태를 확정하지 않습니다.
   Future<void> restoreSession() async {
     if (storageCleanupInProgress || _disposed) return;

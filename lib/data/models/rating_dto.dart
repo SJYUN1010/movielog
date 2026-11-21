@@ -1,4 +1,4 @@
-/// v7 평점 응답 객체(`RatingResponse`)입니다. 등록·수정의 result와 유저별 평점 조회 배열의 항목에 씁니다.
+/// v8 평점 응답 객체(`RatingResponse`)입니다. 등록·수정의 result와 유저별 평점 조회 배열의 항목에 씁니다.
 class RatingDto {
   const RatingDto({
     required this.ratingId,

@@ -102,7 +102,7 @@ void main() {
       expect(request.method, 'GET');
       expect(
         request.uri.toString(),
-        'https://workbook.devnoco.com/v7/members/nickname/'
+        'https://workbook.devnoco.com/v8/members/nickname/'
         '${Uri.encodeComponent('영화광')}',
       );
       expect(request.uri.path, contains('%EC%98%81%ED%99%94%EA%B4%91'));
@@ -116,7 +116,7 @@ void main() {
       final available = await service.checkEmail('movie@umc.com');
 
       expect(available, isTrue);
-      expect(adapter.requests.single.uri.toString(), endsWith('/v7/members/email/movie%40umc.com'));
+      expect(adapter.requests.single.uri.toString(), endsWith('/v8/members/email/movie%40umc.com'));
     });
 
     test('a failure response surfaces as DioException, not as available: false', () async {
@@ -128,7 +128,7 @@ void main() {
   });
 
   group('RatingApiService (public read)', () {
-    test('parses the array body and calls /v7/members/{id}/ratings with the public client', () async {
+    test('parses the array body and calls /v8/members/{id}/ratings with the public client', () async {
       final publicAdapter = _StubAdapter(200, [
         {
           'ratingId': 2,
@@ -152,7 +152,7 @@ void main() {
 
       final ratings = await service.fetchMemberRatings(1);
 
-      expect(publicAdapter.requests.single.uri.path, '/v7/members/1/ratings');
+      expect(publicAdapter.requests.single.uri.path, '/v8/members/1/ratings');
       expect(authAdapter.requests, isEmpty); // 공개 조회는 보호용 Client를 쓰지 않습니다.
       expect(ratings.map((r) => r.movieId), [680, 13]);
       expect(ratings.last.comment, isNull);

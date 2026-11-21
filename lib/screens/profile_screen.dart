@@ -115,6 +115,9 @@ class ProfileScreen extends StatelessWidget {
           ),
           const SizedBox(height: 24),
           MyRatingsEntryTile(onTap: () => context.push('/my/ratings')),
+          const SizedBox(height: 12),
+          // 이 줄은 내 정보(member)가 준비된 뒤에만 그려집니다.
+          MyRatingsEntryTile(title: '내 즐겨찾기', onTap: () => context.push('/my/favorites')),
           const SizedBox(height: 24),
           const FavoriteGenres(genres: _genres),
         ],

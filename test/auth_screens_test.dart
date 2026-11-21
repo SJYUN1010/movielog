@@ -124,7 +124,7 @@ void main() {
 
     testWidgets('a network failure is a different message from a wrong password', (tester) async {
       final s = _LoginSetup();
-      s.authApi.error = dioFailure('/v7/auth/login');
+      s.authApi.error = dioFailure('/v8/auth/login');
       await s.pump(tester);
 
       await tester.enterText(_emailField, 'movie@example.com');
@@ -311,7 +311,7 @@ void main() {
 
     testWidgets('a network failure shows a Snackbar and keeps the screen so it can be retried', (tester) async {
       final s = await pumpEdit(tester);
-      s.members.updateError = dioFailure('/v7/members/me');
+      s.members.updateError = dioFailure('/v8/members/me');
 
       await tester.enterText(find.byType(TextField).at(1), '새닉네임');
       await tester.pump();

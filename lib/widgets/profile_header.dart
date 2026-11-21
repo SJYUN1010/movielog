@@ -3,7 +3,7 @@ import 'package:flutter/material.dart';
 import '../theme/app_colors.dart';
 import '../theme/app_text_styles.dart';
 
-/// 마이페이지 상단의 프로필 영역입니다. 닉네임·가입일·이메일은 `GET /v7/members/me` 응답 값입니다.
+/// 마이페이지 상단의 프로필 영역입니다. 닉네임·가입일·이메일은 `GET /v8/members/me` 응답 값입니다.
 /// 사진은 서버 응답에 없는 기존 디자인 예시 이미지입니다.
 class ProfileHeader extends StatelessWidget {
   const ProfileHeader({

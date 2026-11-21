@@ -17,7 +17,7 @@ import '../widgets/rating_write_guard.dart';
 
 /// 마이페이지 위에 열리는 자식 화면입니다. 하단 NavigationBar 없이 뒤로가기만 둡니다.
 /// 이번 로그인 세션에서 등록한 평점의 조회·수정·삭제는 이 화면에서만 합니다.
-/// v7에는 토큰 기반 "내 평점 전체 GET"이 없어, 앱을 다시 켜면 이전 평점을 복원하지 않습니다.
+/// v8에는 토큰 기반 "내 평점 전체 GET"이 없어, 앱을 다시 켜면 이전 평점을 복원하지 않습니다.
 class MyRatingsScreen extends StatelessWidget {
   const MyRatingsScreen({super.key});
 
@@ -93,7 +93,7 @@ class _RatingList extends StatelessWidget {
       initialScore: rating.score,
       initialComment: rating.comment,
       // 400·네트워크 실패는 Dialog 안에, 403·404는 Snackbar로 안내합니다. 401이면 로그인 화면으로 이동합니다.
-      onSubmit: (score, comment) => guardRatingWrite(
+      onSubmit: (score, comment, _) => guardRatingWrite(
         messenger,
         () => viewModel.updateRating(
           ratingId: rating.ratingId,

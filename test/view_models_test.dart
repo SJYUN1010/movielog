@@ -1,7 +1,9 @@
 import 'package:flutter_test/flutter_test.dart';
 
+import 'package:movielog/view_models/load_phase.dart';
 import 'package:movielog/view_models/movie_home_view_model.dart';
 import 'package:movielog/view_models/movie_list_view_model.dart';
+import 'package:movielog/view_models/paged_movies_view_model.dart';
 
 import 'support/fakes.dart';
 
@@ -62,41 +64,38 @@ void main() {
     });
   });
 
-  group('MovieListViewModel', () {
-    test('builds at most 30 movies from pages, de-duplicating by id', () async {
-      final service = FakeTmdbMovieService()..overlap = 10;
+  group('MovieListViewModel (page based)', () {
+    test('shows only the first page; more pages come from loadNextPage, de-duplicated by id', () async {
+      final service = FakeTmdbMovieService(pageSize: 20)..overlap = 5;
       final viewModel = MovieListViewModel(service);
 
       await viewModel.load();
 
-      expect(viewModel.status, MovieListLoadStatus.success);
-      expect(viewModel.movies.length, 30);
-      expect(viewModel.movies.map((m) => m.id).toSet().length, 30);
+      expect(viewModel.phase, LoadPhase.ready);
+      expect(viewModel.paged.movies, hasLength(20));
+      expect(service.discoverCalls.map((c) => c.page), [1]); // 5주차의 30개 수집이 아니라 첫 page만 조회합니다.
+
+      await viewModel.paged.loadNextPage();
+
       expect(service.discoverCalls.map((c) => c.page), [1, 2]);
+      expect(viewModel.paged.movies, hasLength(35)); // 겹친 5편은 제외됩니다.
+      expect(viewModel.paged.movies.map((m) => m.id).toSet(), hasLength(35));
     });
 
-    test('stops when there are no more pages and shows what exists', () async {
-      final service = FakeTmdbMovieService(pageSize: 8, totalPages: 2);
-      final viewModel = MovieListViewModel(service);
-
-      await viewModel.load();
-
-      expect(viewModel.movies.length, 16);
-      expect(service.discoverCalls.length, 2);
-    });
-
-    test('selecting a genre re-requests from page 1 with with_genres', () async {
+    test('selecting a genre re-requests from page 1 with that genre and empties the old list', () async {
       final service = FakeTmdbMovieService();
       final viewModel = MovieListViewModel(service);
       await viewModel.load();
+      await viewModel.paged.loadNextPage();
       service.discoverCalls.clear();
 
       await viewModel.selectGenre(878);
 
       expect(viewModel.selectedGenreId, 878);
-      expect(service.discoverCalls.first.page, 1);
-      expect(service.discoverCalls.first.genreId, 878);
-      expect(viewModel.movies, isNotEmpty);
+      expect(service.discoverCalls.single.page, 1);
+      expect(service.discoverCalls.single.genreId, 878);
+      expect(viewModel.paged.nextPage, 2);
+      expect(viewModel.paged.movies.first.genreIds, [878]);
     });
 
     test('selecting 전체 (null) sends no genre', () async {
@@ -109,95 +108,55 @@ void main() {
       await viewModel.selectGenre(null);
 
       expect(viewModel.selectedGenreId, isNull);
-      expect(service.discoverCalls.every((c) => c.genreId == null), isTrue);
+      expect(service.discoverCalls.single.genreId, isNull);
     });
 
-    test('ignores genre changes while a request is in flight', () async {
-      final service = FakeTmdbMovieService(delay: const Duration(milliseconds: 20));
+    test('a slow response of the previous genre never mixes into the new list', () async {
+      final service = FakeTmdbMovieService();
+      service.conditionDelays['genre:878'] = const Duration(milliseconds: 60); // 이전 장르는 느리게
       final viewModel = MovieListViewModel(service);
+      await viewModel.load();
 
-      final loading = viewModel.load();
-      await viewModel.selectGenre(878);
-      await loading;
+      final slow = viewModel.selectGenre(878);
+      await Future<void>.delayed(const Duration(milliseconds: 5));
+      final fast = viewModel.selectGenre(18); // 요청 중에도 바꿀 수 있습니다.
+      await Future.wait([slow, fast]);
 
-      expect(viewModel.selectedGenreId, isNull);
-      expect(service.discoverCalls.every((c) => c.genreId == null), isTrue);
+      expect(viewModel.selectedGenreId, 18);
+      expect(viewModel.paged.movies, isNotEmpty);
+      expect(viewModel.paged.movies.every((m) => m.genreIds.contains(18)), isTrue);
+      expect(viewModel.paged.movies.any((m) => m.genreIds.contains(878)), isFalse);
     });
 
-    test('empty and error statuses; retry keeps the selected genre', () async {
+    test('first page failure is Error and retry keeps the selected genre from page 1', () async {
+      final service = FakeTmdbMovieService();
+      final viewModel = MovieListViewModel(service);
+      await viewModel.load();
+
+      service.failDiscover = true;
+      await viewModel.selectGenre(18);
+      expect(viewModel.phase, LoadPhase.error);
+      expect(viewModel.paged.errorMessage, movieListLoadFailedMessage);
+
+      service
+        ..failDiscover = false
+        ..discoverCalls.clear();
+      await viewModel.retry();
+
+      expect(viewModel.phase, LoadPhase.ready);
+      expect(service.discoverCalls.single.page, 1);
+      expect(service.discoverCalls.single.genreId, 18);
+    });
+
+    test('empty result is Empty', () async {
       final service = FakeTmdbMovieService();
       final viewModel = MovieListViewModel(service);
       await viewModel.load();
 
       service.emptyDiscover = true;
       await viewModel.selectGenre(18);
-      expect(viewModel.status, MovieListLoadStatus.empty);
 
-      service
-        ..emptyDiscover = false
-        ..failDiscover = true;
-      await viewModel.load();
-      expect(viewModel.status, MovieListLoadStatus.error);
-
-      service
-        ..failDiscover = false
-        ..discoverCalls.clear();
-      await viewModel.retry();
-      expect(viewModel.status, MovieListLoadStatus.success);
-      expect(service.discoverCalls.first.genreId, 18);
-      expect(service.discoverCalls.first.page, 1);
-    });
-
-    test('failure keeps the last list; cancelRetry restores it and its genre', () async {
-      final service = FakeTmdbMovieService();
-      final preference = MemoryGenrePreference();
-      final viewModel = MovieListViewModel(service, genrePreference: preference);
-      await viewModel.load();
-      final lastList = viewModel.movies;
-
-      service.failDiscover = true;
-      await viewModel.selectGenre(878);
-      expect(viewModel.status, MovieListLoadStatus.error);
-      expect(viewModel.selectedGenreId, 878);
-      expect(viewModel.movies, lastList);
-      expect(viewModel.errorCount, 1);
-
-      viewModel.cancelRetry();
-
-      expect(viewModel.status, MovieListLoadStatus.success);
-      expect(viewModel.selectedGenreId, isNull);
-      expect(viewModel.movies, lastList);
-      await Future<void>.delayed(Duration.zero);
-      expect(preference.value, isNull);
-    });
-
-    test('retry after a failure uses the selected genre from page 1', () async {
-      final service = FakeTmdbMovieService();
-      final viewModel = MovieListViewModel(service);
-      await viewModel.load();
-      service.failDiscover = true;
-      await viewModel.selectGenre(18);
-      expect(viewModel.errorCount, 1);
-
-      service
-        ..failDiscover = false
-        ..discoverCalls.clear();
-      await viewModel.retry();
-
-      expect(viewModel.status, MovieListLoadStatus.success);
-      expect(service.discoverCalls.first.page, 1);
-      expect(service.discoverCalls.first.genreId, 18);
-    });
-
-    test('cancelRetry does nothing before the first success', () async {
-      final service = FakeTmdbMovieService()..failDiscover = true;
-      final viewModel = MovieListViewModel(service);
-      await viewModel.load();
-      expect(viewModel.status, MovieListLoadStatus.error);
-
-      viewModel.cancelRetry();
-
-      expect(viewModel.status, MovieListLoadStatus.error);
+      expect(viewModel.phase, LoadPhase.empty);
     });
 
     test('genre API failure becomes Error and loads genres again on retry', () async {
@@ -205,19 +164,18 @@ void main() {
       final viewModel = MovieListViewModel(service);
 
       await viewModel.load();
-      expect(viewModel.status, MovieListLoadStatus.error);
+      expect(viewModel.phase, LoadPhase.error);
 
       service.failGenres = false;
       await viewModel.retry();
-      expect(viewModel.status, MovieListLoadStatus.success);
+      expect(viewModel.phase, LoadPhase.ready);
       expect(viewModel.genres, sampleGenres);
     });
 
     test('restores a saved genre id and falls back when it no longer exists', () async {
-      final saved = MemoryGenrePreference(878);
       final restored = MovieListViewModel(
         FakeTmdbMovieService(),
-        genrePreference: saved,
+        genrePreference: MemoryGenrePreference(878),
       );
       await restored.load();
       expect(restored.selectedGenreId, 878);
@@ -232,15 +190,22 @@ void main() {
 
     test('saves the selected genre id', () async {
       final preference = MemoryGenrePreference();
-      final viewModel = MovieListViewModel(
-        FakeTmdbMovieService(),
-        genrePreference: preference,
-      );
+      final viewModel = MovieListViewModel(FakeTmdbMovieService(), genrePreference: preference);
       await viewModel.load();
 
       await viewModel.selectGenre(18);
 
       expect(preference.value, 18);
+    });
+
+    test('does not notify after dispose', () async {
+      final service = FakeTmdbMovieService(delay: const Duration(milliseconds: 20));
+      final viewModel = MovieListViewModel(service);
+
+      final loading = viewModel.load();
+      viewModel.dispose();
+
+      await loading; // 예외 없이 끝나야 합니다.
     });
   });
 }

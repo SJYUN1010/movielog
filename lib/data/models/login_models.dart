@@ -1,6 +1,6 @@
 import 'common_response.dart';
 
-/// `POST /v7/auth/login` 요청입니다. 비밀번호는 서버로 보내기만 하고 어디에도 저장하지 않습니다.
+/// `POST /v8/auth/login` 요청입니다. 비밀번호는 서버로 보내기만 하고 어디에도 저장하지 않습니다.
 class LoginRequest {
   const LoginRequest({required this.email, required this.password});
 
@@ -14,7 +14,7 @@ class LoginRequest {
   String toString() => 'LoginRequest(email: $email, password: ****)';
 }
 
-/// `POST /v7/auth/login` 성공 result입니다. memberId는 없습니다.
+/// `POST /v8/auth/login` 성공 result입니다. memberId는 없습니다.
 /// JWT payload에 memberId가 있을 것이라고 추정하지 않습니다.
 class LoginResult {
   const LoginResult({required this.nickname, required this.accessToken});

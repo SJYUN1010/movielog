@@ -122,17 +122,17 @@ void main() {
   });
 
   group('SignUpService (v7)', () {
-    test('checks use /v7 paths', () async {
+    test('checks use /v8 paths', () async {
       final nickname = _StubAdapter(200, {'available': true});
       expect(await SignUpService(_dio(nickname)).checkNickname('movielover'), isTrue);
-      expect(nickname.requests.single.uri.path, '/v7/members/nickname/movielover');
+      expect(nickname.requests.single.uri.path, '/v8/members/nickname/movielover');
 
       final email = _StubAdapter(200, {'available': false});
       expect(await SignUpService(_dio(email)).checkEmail('movie@umc.com'), isFalse);
-      expect(email.requests.single.uri.toString(), endsWith('/v7/members/email/movie%40umc.com'));
+      expect(email.requests.single.uri.toString(), endsWith('/v8/members/email/movie%40umc.com'));
     });
 
-    test('signUp posts the request body to /v7/members and reads memberId from the result', () async {
+    test('signUp posts the request body to /v8/members and reads memberId from the result', () async {
       final adapter = _StubAdapter(201, {
         'isSuccess': true,
         'code': 'COMMON201',
@@ -146,7 +146,7 @@ void main() {
 
       final request = adapter.requests.single;
       expect(request.method, 'POST');
-      expect(request.uri.path, '/v7/members');
+      expect(request.uri.path, '/v8/members');
       expect(request.data, {
         'email': 'new@umc.com',
         'password': 'Passw0rd!',
@@ -204,7 +204,7 @@ void main() {
 
       final request = adapter.requests.single;
       expect(request.method, 'POST');
-      expect(request.uri.path, '/v7/auth/login');
+      expect(request.uri.path, '/v8/auth/login');
       expect(request.data, {'email': 'movie@umc.com', 'password': 'Umc1234!'});
       expect(result.nickname, '무비러버');
       expect(result.accessToken, 'jwt.value');
@@ -256,13 +256,13 @@ void main() {
       'result': {'email': 'movie@umc.com', 'nickname': '영화광', 'createdAt': '2026-10-10T03:00:00.000Z'},
     };
 
-    test('fetchMe calls GET /v7/members/me and parses email, nickname and createdAt', () async {
+    test('fetchMe calls GET /v8/members/me and parses email, nickname and createdAt', () async {
       final adapter = _StubAdapter(200, meBody);
 
       final member = await MemberApiService(_dio(adapter)).fetchMe();
 
       expect(adapter.requests.single.method, 'GET');
-      expect(adapter.requests.single.uri.path, '/v7/members/me');
+      expect(adapter.requests.single.uri.path, '/v8/members/me');
       expect(member.email, 'movie@umc.com');
       expect(member.nickname, '영화광');
       expect(member.createdAt, DateTime.utc(2026, 10, 10, 3));
@@ -274,7 +274,7 @@ void main() {
       final member = await MemberApiService(_dio(adapter)).updateNickname('영화광');
 
       expect(adapter.requests.single.method, 'PATCH');
-      expect(adapter.requests.single.uri.path, '/v7/members/me');
+      expect(adapter.requests.single.uri.path, '/v8/members/me');
       expect(adapter.requests.single.data, {'nickname': '영화광'});
       expect(member.nickname, '영화광');
     });
@@ -321,7 +321,7 @@ void main() {
       'result': result,
     };
 
-    test('createRating posts to /v7/ratings with the auth client only, no memberId, and parses the Rating', () async {
+    test('createRating posts to /v8/ratings with the auth client only, no memberId, and parses the Rating', () async {
       final publicAdapter = _StubAdapter(200, null);
       final authAdapter = _StubAdapter(201, ok(201, ratingResult));
       final service = RatingApiService(_dio(publicAdapter), _dio(authAdapter));
@@ -332,7 +332,7 @@ void main() {
 
       final request = authAdapter.requests.single;
       expect(request.method, 'POST');
-      expect(request.uri.path, '/v7/ratings');
+      expect(request.uri.path, '/v8/ratings');
       expect(request.data, {'movieId': 550, 'score': 5, 'comment': '최고'});
       expect(publicAdapter.requests, isEmpty);
       expect(rating.ratingId, 12);
@@ -360,7 +360,7 @@ void main() {
       await service.updateRating(ratingId: 3, score: 4);
 
       expect(adapter.requests.first.method, 'PATCH');
-      expect(adapter.requests.first.uri.path, '/v7/ratings/3');
+      expect(adapter.requests.first.uri.path, '/v8/ratings/3');
       expect(adapter.requests.first.data, {'score': 4, 'comment': '수정 후기'});
       expect(adapter.requests.last.data, {'score': 4, 'comment': null});
       expect(first.score, 4);
@@ -373,7 +373,7 @@ void main() {
       await RatingApiService(_dio(_StubAdapter(200, null)), _dio(adapter)).deleteRating(3);
 
       expect(adapter.requests.single.method, 'DELETE');
-      expect(adapter.requests.single.uri.path, '/v7/ratings/3');
+      expect(adapter.requests.single.uri.path, '/v8/ratings/3');
     });
 
     test('deleteRating treats the old v6 204 as an unexpected response', () async {
