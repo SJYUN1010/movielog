@@ -6,12 +6,16 @@ import 'package:movielog/data/dto/tmdb_movie_dto.dart';
 import 'package:movielog/data/dto/tmdb_movie_page_dto.dart';
 import 'package:movielog/data/models/common_response.dart';
 import 'package:movielog/data/models/create_member_request.dart';
+import 'package:movielog/data/models/favorite_check_dto.dart';
+import 'package:movielog/data/models/favorite_response_dto.dart';
 import 'package:movielog/data/models/login_models.dart';
 import 'package:movielog/data/models/member_info.dart';
+import 'package:movielog/data/models/movie_record_models.dart';
 import 'package:movielog/data/models/rating_dto.dart';
 import 'package:movielog/data/models/rating_request.dart';
 import 'package:movielog/data/models/sign_up_models.dart';
 import 'package:movielog/data/services/auth_api_service.dart';
+import 'package:movielog/data/services/favorite_api_service.dart';
 import 'package:movielog/data/services/member_api_service.dart';
 import 'package:movielog/data/services/rating_api_service.dart';
 import 'package:movielog/data/services/sign_up_service.dart';
@@ -72,6 +76,20 @@ class FakeTmdbMovieService extends TmdbMovieService {
   bool failGenres = false;
   bool emptyDiscover = false;
 
+  /// 이 page의 Discover/Search 요청만 실패시킵니다(다음 page 실패 후 같은 page 재시도 확인용).
+  final failingPages = <int>{};
+
+  /// page별 응답 지연입니다. 늦게 도착한 이전 응답이 섞이는지 볼 때 씁니다.
+  final pageDelays = <int, Duration>{};
+
+  /// 조건(장르·검색어)별 응답 지연입니다. key는 `genre:{id}` 또는 `query:{text}`입니다.
+  final conditionDelays = <String, Duration>{};
+
+  // 검색
+  bool failSearch = false;
+  bool emptySearch = false;
+  final searchCalls = <({int page, String query})>[];
+
   int popularCalls = 0;
   int genreCalls = 0;
   final discoverCalls = <DiscoverCall>[];
@@ -97,8 +115,10 @@ class FakeTmdbMovieService extends TmdbMovieService {
   @override
   Future<TmdbMoviePageDto> discoverMovies({int page = 1, int? genreId}) async {
     discoverCalls.add(DiscoverCall(page, genreId));
-    await _wait();
-    if (failDiscover) throw DioException(requestOptions: RequestOptions(path: '/discover/movie'));
+    await Future<void>.delayed((pageDelays[page] ?? Duration.zero) + (conditionDelays['genre:$genreId'] ?? delay));
+    if (failDiscover || failingPages.contains(page)) {
+      throw DioException(requestOptions: RequestOptions(path: '/discover/movie'));
+    }
     if (emptyDiscover) {
       return const TmdbMoviePageDto(page: 1, results: [], totalPages: 1, totalResults: 0);
     }
@@ -106,6 +126,28 @@ class FakeTmdbMovieService extends TmdbMovieService {
     return TmdbMoviePageDto(
       page: page,
       results: [for (var i = 0; i < pageSize; i++) movieDto(start + i + 1, genreIds: [genreId ?? 18])],
+      totalPages: totalPages,
+      totalResults: totalPages * pageSize,
+    );
+  }
+
+  @override
+  Future<TmdbMoviePageDto> searchMovies({required int page, required String query}) async {
+    searchCalls.add((page: page, query: query));
+    await Future<void>.delayed((pageDelays[page] ?? Duration.zero) + (conditionDelays['query:$query'] ?? delay));
+    if (failSearch || failingPages.contains(page)) {
+      throw DioException(requestOptions: RequestOptions(path: '/search/movie'));
+    }
+    if (emptySearch) {
+      return const TmdbMoviePageDto(page: 1, results: [], totalPages: 1, totalResults: 0);
+    }
+    final start = (page - 1) * pageSize;
+    return TmdbMoviePageDto(
+      page: page,
+      results: [
+        for (var i = 0; i < pageSize; i++)
+          movieDto(start + i + 1000, title: '$query ${start + i + 1}'),
+      ],
       totalPages: totalPages,
       totalResults: totalPages * pageSize,
     );
@@ -124,6 +166,21 @@ class FakeTmdbMovieService extends TmdbMovieService {
       throw DioException(requestOptions: RequestOptions(path: '/movie/$movieId'));
     }
     return movieDetails[movieId];
+  }
+
+  /// 영화 한 편 조회입니다. 없는 id는 TMDB처럼 404 DioException을 던집니다.
+  @override
+  Future<TmdbMovieDto> fetchMovieDetail(int movieId) async {
+    detailCalls.add(movieId);
+    await _wait();
+    if (failingDetailIds.contains(movieId)) {
+      throw DioException(requestOptions: RequestOptions(path: '/movie/$movieId'));
+    }
+    final movie = movieDetails[movieId];
+    if (movie == null) {
+      throw dioFailure('/movie/$movieId', statusCode: 404, data: {'success': false});
+    }
+    return movie;
   }
 
   @override
@@ -164,7 +221,7 @@ DioException dioFailure(String path, {int? statusCode, Object? data}) {
 /// 공통 오류 응답 `{ isSuccess: false, code, message, result: null }`을 가진 실패입니다.
 DioException commonFailure(int statusCode, String code, String message) {
   return dioFailure(
-    '/v7',
+    '/v8',
     statusCode: statusCode,
     data: {'isSuccess': false, 'code': code, 'message': message, 'result': null},
   );
@@ -198,7 +255,7 @@ class FakeSignUpService extends SignUpService {
   Future<bool> checkNickname(String nickname) async {
     nicknameCalls.add(nickname.trim());
     await Future<void>.delayed(delay);
-    if (fail) throw dioFailure('/v7/members/nickname');
+    if (fail) throw dioFailure('/v8/members/nickname');
     return !takenNicknames.contains(nickname.trim());
   }
 
@@ -206,7 +263,7 @@ class FakeSignUpService extends SignUpService {
   Future<bool> checkEmail(String email) async {
     emailCalls.add(email.trim());
     await Future<void>.delayed(delay);
-    if (fail) throw dioFailure('/v7/members/email');
+    if (fail) throw dioFailure('/v8/members/email');
     return !takenEmails.contains(email.trim());
   }
 
@@ -327,7 +384,7 @@ class FakeRatingApiService extends RatingApiService {
     await beforeResponse?.call();
     final error = deleteFailure;
     if (error != null) throw error;
-    if (networkFailingDeleteIds.contains(ratingId)) throw dioFailure('/v7/ratings/$ratingId');
+    if (networkFailingDeleteIds.contains(ratingId)) throw dioFailure('/v8/ratings/$ratingId');
     if (failingDeleteIds.contains(ratingId)) {
       throw commonFailure(404, 'RATING404_1', '해당 평점을 찾을 수 없습니다.');
     }
@@ -469,4 +526,110 @@ class MemoryEmailPreference implements EmailPreference {
 
   @override
   Future<void> clear() async => email = null;
+}
+
+
+FavoriteResponseDto favoriteDto(int favoriteId, int movieId) {
+  return FavoriteResponseDto(
+    favoriteId: favoriteId,
+    movieId: movieId,
+    createdAt: DateTime.utc(2026, 11, 20, 3),
+  );
+}
+
+/// 서버 상태를 흉내 내는 즐겨찾기 서비스입니다. memberId는 받지 않습니다(토큰이 회원을 식별합니다).
+class FakeFavoriteApiService extends FavoriteApiService {
+  FakeFavoriteApiService({Iterable<int> movieIds = const []})
+    : super(Dio()) {
+    for (final id in movieIds) {
+      favorites[id] = favoriteDto(_nextId++, id);
+    }
+  }
+
+  /// movieId → 즐겨찾기 응답입니다.
+  final favorites = <int, FavoriteResponseDto>{};
+  Duration delay = Duration.zero;
+  int _nextId = 1;
+
+  // 실패 주입: 값이 있으면 한 번 던지고 지워집니다. 계속 실패시키려면 Persistent를 true로 둡니다.
+  Object? listError;
+  Object? checkError;
+  Object? addError;
+  Object? deleteError;
+  Object? recordError;
+  bool persistentErrors = false;
+
+  /// 즐겨찾기 목록 조회를 이 횟수만큼 실패시킵니다.
+  int failListTimes = 0;
+
+  // 호출 기록
+  int listCalls = 0;
+  final checkCalls = <int>[];
+  final addCalls = <int>[];
+  final deleteCalls = <int>[];
+  final records = <MovieRecordRequest>[];
+
+  /// 호출이 시작될 때 실행할 훅입니다(응답이 오기 전에 계정을 바꾸는 상황을 만들 때 씁니다).
+  Future<void> Function()? onList;
+
+  Object? _take(Object? error, void Function() clear) {
+    if (error != null && !persistentErrors) clear();
+    return error;
+  }
+
+  @override
+  Future<List<FavoriteResponseDto>> fetchMyFavorites() async {
+    listCalls++;
+    await onList?.call();
+    await Future<void>.delayed(delay);
+    if (failListTimes > 0) {
+      failListTimes--;
+      throw listError ?? dioFailure('/v8/favorites');
+    }
+    final error = _take(listError, () => listError = null);
+    if (error != null) throw error;
+    return favorites.values.toList().reversed.toList();
+  }
+
+  @override
+  Future<FavoriteCheckDto> checkFavorite({required int movieId}) async {
+    checkCalls.add(movieId);
+    await Future<void>.delayed(delay);
+    final error = _take(checkError, () => checkError = null);
+    if (error != null) throw error;
+    return FavoriteCheckDto(movieId: movieId, isFavorite: favorites.containsKey(movieId));
+  }
+
+  @override
+  Future<FavoriteResponseDto> addFavorite({required int movieId}) async {
+    addCalls.add(movieId);
+    await Future<void>.delayed(delay);
+    final error = _take(addError, () => addError = null);
+    if (error != null) throw error;
+    if (favorites.containsKey(movieId)) {
+      throw commonFailure(409, 'FAVORITE409_1', '이미 이 영화를 즐겨찾기하셨습니다.');
+    }
+    return favorites[movieId] = favoriteDto(_nextId++, movieId);
+  }
+
+  @override
+  Future<void> deleteFavorite({required int movieId}) async {
+    deleteCalls.add(movieId);
+    await Future<void>.delayed(delay);
+    final error = _take(deleteError, () => deleteError = null);
+    if (error != null) throw error;
+    if (favorites.remove(movieId) == null) {
+      throw commonFailure(404, 'FAVORITE404_1', '즐겨찾기한 영화를 찾을 수 없습니다.');
+    }
+  }
+
+  @override
+  Future<MovieRecordResult> saveMovieRecord(MovieRecordRequest request) async {
+    records.add(request);
+    await Future<void>.delayed(delay);
+    final error = _take(recordError, () => recordError = null);
+    if (error != null) throw error;
+    final favorite = request.addToFavorites ? (favorites[request.movieId] = favoriteDto(_nextId++, request.movieId)) : null;
+    return MovieRecordResult(rating: ratingDto(500, movieId: request.movieId, score: request.score, comment: request.comment), favorite: favorite);
+  }
 }

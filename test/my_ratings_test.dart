@@ -208,7 +208,7 @@ void main() {
     test('a network failure is an inline error and does not sign out', () async {
       final s = _Setup();
       await s.start();
-      s.ratings.deleteFailure = dioFailure('/v7/ratings/1');
+      s.ratings.deleteFailure = dioFailure('/v8/ratings/1');
 
       final error = await _error(() => s.viewModel.deleteRating(1));
 

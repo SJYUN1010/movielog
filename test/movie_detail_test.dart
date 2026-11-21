@@ -5,14 +5,16 @@ import 'package:flutter_test/flutter_test.dart';
 import 'package:go_router/go_router.dart';
 import 'package:provider/provider.dart';
 
+import 'package:movielog/core/session/session_guard.dart';
 import 'package:movielog/data/models/rating_dto.dart';
 import 'package:movielog/data/models/rating_request.dart';
+import 'package:movielog/data/services/favorite_api_service.dart';
 import 'package:movielog/data/services/rating_api_service.dart';
 import 'package:movielog/data/services/tmdb_movie_service.dart';
 import 'package:movielog/screens/movie_detail_loader.dart';
-import 'package:movielog/screens/movie_detail_screen.dart';
 import 'package:movielog/theme/app_theme.dart';
 import 'package:movielog/view_models/auth_view_model.dart';
+import 'package:movielog/view_models/favorite_detail_view_model.dart';
 import 'package:movielog/view_models/movie_detail_view_model.dart';
 import 'package:movielog/view_models/my_ratings_view_model.dart';
 import 'package:movielog/view_models/rating_write_exception.dart';
@@ -25,6 +27,9 @@ void _useMobileViewport(WidgetTester tester) {
   tester.view.devicePixelRatio = 1.0;
   addTearDown(tester.view.reset);
 }
+
+/// 이미 즐겨찾기한 영화로 시작합니다. 이 경우 평점 Dialog에는 체크박스가 없고 평점 API(POST /v8/ratings)만 씁니다.
+FakeFavoriteApiService _favoriteMovie() => FakeFavoriteApiService(movieIds: [550]);
 
 /// 목록에서 선택한 영화의 TMDB id를 평점 요청의 movieId로 그대로 쓰는지 확인할 때 씁니다.
 final _movie = movieDto(550, title: '파이트 클럽');
@@ -173,8 +178,11 @@ void main() {
       bool withExtra = true,
       FakeRatingApiService? ratings,
       FakeTmdbMovieService? movies,
+      FakeFavoriteApiService? favorites,
     }) async {
       _useMobileViewport(tester);
+      final favoriteService = favorites ?? FakeFavoriteApiService();
+      final guard = SessionGuard()..startSession('movie@example.com');
       final ratingService = ratings ?? FakeRatingApiService();
       final movieService = movies ?? FakeTmdbMovieService();
       final auth = (await tester.runAsync(signedInAuthViewModel))!;
@@ -184,9 +192,18 @@ void main() {
         routes: [
           GoRoute(
             path: '/movies/:movieId',
-            builder: (context, state) => MovieDetailLoader(
-              movieId: int.parse(state.pathParameters['movieId']!),
-              initialMovie: withExtra ? _movie : null,
+            builder: (context, state) => ChangeNotifierProvider<FavoriteDetailViewModel>(
+              create: (context) => FavoriteDetailViewModel(
+                movieId: 550,
+                favoriteApi: favoriteService,
+                sessionGuard: guard,
+                accountId: 'movie@example.com',
+                onSessionExpired: () => auth.expireSession(),
+              ),
+              child: MovieDetailLoader(
+                movieId: int.parse(state.pathParameters['movieId']!),
+                initialMovie: withExtra ? _movie : null,
+              ),
             ),
           ),
         ],
@@ -196,6 +213,7 @@ void main() {
           providers: [
             Provider<TmdbMovieService>.value(value: movieService),
             Provider<RatingApiService>.value(value: ratingService),
+            Provider<FavoriteApiService>.value(value: favoriteService),
             ChangeNotifierProvider<AuthViewModel>.value(value: auth),
             ChangeNotifierProvider<MyRatingsViewModel>.value(value: myRatings),
           ],
@@ -252,7 +270,7 @@ void main() {
     });
 
     testWidgets('registering a rating shows the success Snackbar and sends the TMDB id', (tester) async {
-      final fakes = await pumpDetail(tester);
+      final fakes = await pumpDetail(tester, favorites: _favoriteMovie());
 
       await tester.tap(find.text('평점 남기기'));
       await tester.pumpAndSettle();
@@ -270,7 +288,7 @@ void main() {
       expect(fakes.ratings.createdRequests.single.score, 4);
       expect(fakes.ratings.createdRequests.single.comment, '인상적인 반전');
       expect(
-        find.text('평점을 등록했습니다. 마이페이지의 "내가 등록한 평점"에서 확인할 수 있습니다.'),
+        find.text('평점을 저장했습니다. 마이페이지의 "내가 등록한 평점"에서 확인할 수 있습니다.'),
         findsOneWidget,
       );
       expect(find.text('내 평점 4'), findsOneWidget);
@@ -282,7 +300,7 @@ void main() {
     ) async {
       final ratings = FakeRatingApiService()
         ..createFailure = commonFailure(409, 'RATING409_1', '이미 이 영화에 평점을 남기셨습니다.');
-      final fakes = await pumpDetail(tester, ratings: ratings);
+      final fakes = await pumpDetail(tester, ratings: ratings, favorites: _favoriteMovie());
 
       await tester.tap(find.text('평점 남기기'));
       await tester.pumpAndSettle();
@@ -293,14 +311,14 @@ void main() {
 
       expect(find.byType(RatingDialog), findsNothing);
       expect(find.text('이미 이 영화에 평점을 남기셨습니다.'), findsOneWidget);
-      expect(find.textContaining('평점을 등록했습니다'), findsNothing);
+      expect(find.textContaining('평점을 저장했습니다'), findsNothing);
       expect(fakes.auth.status, AuthStatus.signedIn);
     });
 
     testWidgets('a 400 keeps the Dialog open with the input and the server message', (tester) async {
       final ratings = FakeRatingApiService()
         ..createFailure = commonFailure(400, 'COMMON400', '후기는 500자 이하로 입력해주세요.');
-      await pumpDetail(tester, ratings: ratings);
+      await pumpDetail(tester, ratings: ratings, favorites: _favoriteMovie());
 
       await tester.tap(find.text('평점 남기기'));
       await tester.pumpAndSettle();
@@ -319,13 +337,13 @@ void main() {
       await tester.tap(find.widgetWithText(ElevatedButton, '취소'));
       await tester.pumpAndSettle();
       expect(find.byType(RatingDialog), findsNothing);
-      expect(find.textContaining('평점을 등록했습니다'), findsNothing);
+      expect(find.textContaining('평점을 저장했습니다'), findsNothing);
     });
 
     testWidgets('a 401 closes the Dialog and expires the session without a rating message', (tester) async {
       final ratings = FakeRatingApiService()
         ..createFailure = commonFailure(401, 'AUTH401_4', '토큰이 만료되었습니다. 다시 로그인해주세요.');
-      final fakes = await pumpDetail(tester, ratings: ratings);
+      final fakes = await pumpDetail(tester, ratings: ratings, favorites: _favoriteMovie());
 
       await tester.tap(find.text('평점 남기기'));
       await tester.pumpAndSettle();
@@ -335,25 +353,209 @@ void main() {
       await tester.pumpAndSettle();
 
       expect(find.byType(RatingDialog), findsNothing);
-      expect(find.textContaining('평점을 등록했습니다'), findsNothing);
+      expect(find.textContaining('평점을 저장했습니다'), findsNothing);
       expect(fakes.auth.status, AuthStatus.signedOut);
       expect(fakes.auth.sessionExpired, isTrue);
     });
 
-    testWidgets('the favorite toggle still works locally', (tester) async {
+    testWidgets('the bookmark mirrors the server value: outline when not favorite, filled when favorite', (tester) async {
       await pumpDetail(tester);
+      expect(find.byIcon(Icons.bookmark_border), findsOneWidget);
+      expect(find.byIcon(Icons.bookmark), findsNothing);
+    });
 
-      await tester.tap(find.text('즐겨찾기'));
+    testWidgets('a favorite movie opens with a filled bookmark and the rate button only saves a rating', (tester) async {
+      final favorites = FakeFavoriteApiService(movieIds: [550]);
+      await pumpDetail(tester, favorites: favorites);
+
+      expect(find.byIcon(Icons.bookmark), findsOneWidget);
+      expect(favorites.checkCalls, [550]);
+    });
+
+    testWidgets('tapping the bookmark registers on the server first, then flips the icon and shows a Snackbar', (
+      tester,
+    ) async {
+      final favorites = FakeFavoriteApiService()..delay = const Duration(milliseconds: 200);
+      await pumpDetail(tester, favorites: favorites);
+
+      await tester.tap(find.byIcon(Icons.bookmark_border));
+      await tester.pump(const Duration(milliseconds: 50));
+
+      // 요청 중: 북마크 자리에는 인디케이터만 있고 아이콘은 아직 그대로(optimistic update 없음)
+      expect(find.byType(CircularProgressIndicator), findsOneWidget);
+      expect(find.byIcon(Icons.bookmark), findsNothing);
+      expect(favorites.addCalls, [550]);
+
+      await tester.pump(const Duration(milliseconds: 400));
       await tester.pump();
-
+      expect(find.byIcon(Icons.bookmark), findsOneWidget);
       expect(find.text('즐겨찾기에 추가했습니다.'), findsOneWidget);
-      expect(find.byType(MovieDetailScreen), findsOneWidget);
+
+      await tester.tap(find.byIcon(Icons.bookmark));
+      await tester.pump(const Duration(milliseconds: 400));
+      await tester.pump();
+      expect(find.byIcon(Icons.bookmark_border), findsOneWidget);
+      expect(find.text('즐겨찾기에서 삭제했습니다.'), findsOneWidget);
+      expect(favorites.deleteCalls, [550]);
+    });
+
+    testWidgets('a failure keeps the previous icon, shows a Snackbar and an inline reason, and sends no auto retry', (
+      tester,
+    ) async {
+      final favorites = FakeFavoriteApiService();
+      await pumpDetail(tester, favorites: favorites);
+      favorites.addError = dioFailure('/v8/favorites');
+
+      await tester.tap(find.byIcon(Icons.bookmark_border));
+      await tester.pumpAndSettle();
+
+      expect(find.byIcon(Icons.bookmark_border), findsOneWidget);
+      expect(find.text('즐겨찾기 등록에 실패했습니다.'), findsWidgets); // Snackbar + 본문 안내
+      expect(favorites.addCalls, hasLength(1));
+    });
+
+    testWidgets('FAVORITE409_1 is shown as the server value, not as a failure', (tester) async {
+      final favorites = FakeFavoriteApiService();
+      await pumpDetail(tester, favorites: favorites);
+      favorites.favorites[550] = favoriteDto(1, 550); // 다른 기기에서 이미 등록됨
+
+      await tester.tap(find.byIcon(Icons.bookmark_border));
+      await tester.pumpAndSettle();
+
+      expect(find.byIcon(Icons.bookmark), findsOneWidget);
+      expect(find.textContaining('실패'), findsNothing);
+    });
+
+    testWidgets('a 401 on the bookmark signs out once without a failure message', (tester) async {
+      final favorites = FakeFavoriteApiService();
+      final fakes = await pumpDetail(tester, favorites: favorites);
+      favorites.addError = commonFailure(401, 'AUTH401_4', '토큰이 만료되었습니다.');
+
+      await tester.tap(find.byIcon(Icons.bookmark_border));
+      await tester.pumpAndSettle();
+
+      expect(fakes.auth.status, AuthStatus.signedOut);
+      expect(find.textContaining('실패'), findsNothing);
+    });
+
+    testWidgets('when the first status check fails a refresh button reloads it', (tester) async {
+      final favorites = FakeFavoriteApiService(movieIds: [550])..checkError = dioFailure('/v8/favorites/550');
+      await pumpDetail(tester, favorites: favorites);
+
+      expect(find.text('즐겨찾기 여부를 확인하지 못했습니다.'), findsOneWidget);
+      expect(tester.widget<IconButton>(find.widgetWithIcon(IconButton, Icons.bookmark_border)).onPressed, isNull);
+
+      await tester.tap(find.byTooltip('여부 다시 확인'));
+      await tester.pumpAndSettle();
+
+      expect(find.byIcon(Icons.bookmark), findsOneWidget);
+      expect(find.text('즐겨찾기 여부를 확인하지 못했습니다.'), findsNothing);
+    });
+
+    testWidgets('Challenge: the dialog shows "즐겨찾기에도 추가" only for a movie that is not a favorite yet', (
+      tester,
+    ) async {
+      await pumpDetail(tester);
+      await tester.tap(find.text('평점 남기기'));
+      await tester.pumpAndSettle();
+
+      expect(find.text('즐겨찾기에도 추가'), findsOneWidget);
+    });
+
+    testWidgets('Challenge: for a favorite movie the dialog has no checkbox and uses the plain ratings API', (
+      tester,
+    ) async {
+      final favorites = FakeFavoriteApiService(movieIds: [550]);
+      final fakes = await pumpDetail(tester, favorites: favorites);
+
+      await tester.tap(find.text('평점 남기기'));
+      await tester.pumpAndSettle();
+      expect(find.text('즐겨찾기에도 추가'), findsNothing);
+
+      await tester.tap(find.byIcon(Icons.star_border).at(2));
+      await tester.pump();
+      await tester.tap(find.widgetWithText(ElevatedButton, '확인'));
+      await tester.pumpAndSettle();
+
+      expect(fakes.ratings.createdRequests.single.movieId, 550);
+      expect(favorites.records, isEmpty); // movie-records는 쓰지 않음
+    });
+
+    testWidgets('Challenge: with the box checked the rating and favorite are saved by ONE movie-records request', (
+      tester,
+    ) async {
+      final favorites = FakeFavoriteApiService();
+      final fakes = await pumpDetail(tester, favorites: favorites);
+
+      await tester.tap(find.text('평점 남기기'));
+      await tester.pumpAndSettle();
+      await tester.tap(find.byIcon(Icons.star_border).at(3));
+      await tester.pump();
+      await tester.enterText(find.byType(TextField), '한 번에 저장');
+      await tester.tap(find.text('즐겨찾기에도 추가'));
+      await tester.pump();
+      await tester.tap(find.widgetWithText(ElevatedButton, '확인'));
+      await tester.pumpAndSettle();
+
+      final record = favorites.records.single;
+      expect(record.movieId, 550);
+      expect(record.score, 4);
+      expect(record.comment, '한 번에 저장');
+      expect(record.addToFavorites, isTrue);
+      expect(record.toJson().containsKey('memberId'), isFalse);
+      expect(fakes.ratings.createdRequests, isEmpty); // 평점 API를 따로 부르지 않음
+      expect(find.byType(RatingDialog), findsNothing);
+      expect(find.textContaining('평점을 저장했습니다.'), findsOneWidget);
+      expect(find.byIcon(Icons.bookmark), findsOneWidget); // 북마크가 서버 값으로 맞춰짐
+      expect(fakes.myRatings.ratings.single.rating.movieId, 550);
+    });
+
+    testWidgets('Challenge: unchecked saves only the rating (addToFavorites false, favorite null)', (tester) async {
+      final favorites = FakeFavoriteApiService();
+      await pumpDetail(tester, favorites: favorites);
+
+      await tester.tap(find.text('평점 남기기'));
+      await tester.pumpAndSettle();
+      await tester.tap(find.byIcon(Icons.star_border).at(1));
+      await tester.pump();
+      await tester.tap(find.widgetWithText(ElevatedButton, '확인'));
+      await tester.pumpAndSettle();
+
+      expect(favorites.records.single.addToFavorites, isFalse);
+      expect(find.byIcon(Icons.bookmark_border), findsOneWidget);
+    });
+
+    testWidgets('Challenge: COMMON400 / network keep the dialog and the input; 409s close it with a Snackbar', (
+      tester,
+    ) async {
+      final favorites = FakeFavoriteApiService()..recordError = dioFailure('/v8/movie-records');
+      await pumpDetail(tester, favorites: favorites);
+
+      await tester.tap(find.text('평점 남기기'));
+      await tester.pumpAndSettle();
+      await tester.tap(find.byIcon(Icons.star_border).at(2));
+      await tester.pump();
+      await tester.enterText(find.byType(TextField), '지켜져야 하는 후기');
+      await tester.tap(find.text('즐겨찾기에도 추가'));
+      await tester.pump();
+      await tester.tap(find.widgetWithText(ElevatedButton, '확인'));
+      await tester.pumpAndSettle();
+
+      expect(find.byType(RatingDialog), findsOneWidget);
+      expect(tester.widget<TextField>(find.byType(TextField)).controller!.text, '지켜져야 하는 후기');
+
+      favorites.recordError = commonFailure(409, 'FAVORITE409_1', '이미 이 영화를 즐겨찾기하셨습니다.');
+      await tester.tap(find.widgetWithText(ElevatedButton, '확인'));
+      await tester.pumpAndSettle();
+
+      expect(find.byType(RatingDialog), findsNothing);
+      expect(find.text('이미 이 영화를 즐겨찾기하셨습니다.'), findsOneWidget);
     });
 
     testWidgets('does not close the Dialog or go back while saving', (tester) async {
       final completer = Completer<void>();
       final ratings = _SlowRatings(completer.future);
-      await pumpDetail(tester, ratings: ratings);
+      await pumpDetail(tester, ratings: ratings, favorites: _favoriteMovie());
 
       await tester.tap(find.text('평점 남기기'));
       await tester.pumpAndSettle();

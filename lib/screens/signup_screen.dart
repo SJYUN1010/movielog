@@ -79,7 +79,7 @@ class _SignUpScreenState extends State<SignUpScreen> {
     if (!mounted) return;
 
     if (viewModel.submitStatus == SubmitStatus.success && viewModel.createdMemberId != null) {
-      // v7 회원가입은 토큰을 주지 않습니다. 가입한 계정으로 로그인하도록 안내하고 로그인 화면으로 보냅니다.
+      // v8 회원가입은 토큰을 주지 않습니다. 가입한 계정으로 로그인하도록 안내하고 로그인 화면으로 보냅니다.
       // memberId는 이후 평점 요청에 쓰지 않습니다(토큰이 회원을 식별합니다).
       ScaffoldMessenger.of(context)
         ..clearSnackBars()

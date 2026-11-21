@@ -56,7 +56,7 @@ void main() {
 
     test('a network failure is not reported as a wrong password', () async {
       final h = _Harness();
-      h.auth.error = dioFailure('/v7/auth/login');
+      h.auth.error = dioFailure('/v8/auth/login');
 
       await h.viewModel.login('movie@example.com', 'Umc1234!');
 
@@ -142,7 +142,7 @@ void main() {
     test('a network failure keeps the token and asks for a retry instead of signing out', () async {
       final h = _Harness(token: 'stored-token');
       h.members
-        ..meError = dioFailure('/v7/members/me')
+        ..meError = dioFailure('/v8/members/me')
         ..failMeTimes = 1;
 
       await h.viewModel.restoreSession();
@@ -159,7 +159,7 @@ void main() {
     test('a 5xx is also a retry, not an expiry', () async {
       final h = _Harness(token: 'stored-token');
       h.members
-        ..meError = dioFailure('/v7/members/me', statusCode: 500, data: {'message': 'x'})
+        ..meError = dioFailure('/v8/members/me', statusCode: 500, data: {'message': 'x'})
         ..failMeTimes = 1;
 
       await h.viewModel.restoreSession();
@@ -204,7 +204,7 @@ void main() {
       final h = _Harness();
       await h.viewModel.login('movie@example.com', 'Umc1234!');
       h.members
-        ..meError = dioFailure('/v7/members/me')
+        ..meError = dioFailure('/v8/members/me')
         ..failMeTimes = 1;
 
       await h.viewModel.loadMember();

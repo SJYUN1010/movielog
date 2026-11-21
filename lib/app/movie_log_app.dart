@@ -6,8 +6,11 @@ import 'package:provider/provider.dart';
 
 import '../core/network/movie_log_client.dart';
 import '../core/network/tmdb_client.dart';
+import '../core/session/auth_session_bridge.dart';
+import '../core/session/session_guard.dart';
 import '../core/storage/token_storage.dart';
 import '../data/services/auth_api_service.dart';
+import '../data/services/favorite_api_service.dart';
 import '../data/services/member_api_service.dart';
 import '../data/services/rating_api_service.dart';
 import '../data/services/sign_up_service.dart';
@@ -59,6 +62,10 @@ class MovieLogApp extends StatelessWidget {
           update: (_, publicClient, authClient, _) =>
               RatingApiService(publicClient.dio, authClient.dio),
         ),
+        // 즐겨찾기는 보호 API라 보호용 Client를 씁니다. TMDB Client와 합치지 않습니다.
+        ProxyProvider<AuthMovieLogClient, FavoriteApiService>(
+          update: (_, client, _) => FavoriteApiService(client.dio),
+        ),
         Provider<EmailPreference>(create: (_) => EmailPreference()),
         ChangeNotifierProvider<AuthViewModel>(
           create: (context) => AuthViewModel(
@@ -67,6 +74,20 @@ class MovieLogApp extends StatelessWidget {
             context.read<TokenStorage>(),
           ),
         ),
+        // AuthViewModel의 상태 변화를 SessionGuard에 전달합니다. 늦게 도착한 이전 계정의 응답을 거르는 기준입니다.
+        Provider<AuthSessionBridge>(
+          lazy: false,
+          create: (context) {
+            final auth = context.read<AuthViewModel>();
+            return AuthSessionBridge(
+              authSignals: auth,
+              sessionVersion: () => auth.sessionVersion,
+              verifiedEmail: () => auth.status == AuthStatus.signedIn ? auth.member?.email : null,
+            );
+          },
+          dispose: (_, bridge) => bridge.dispose(),
+        ),
+        Provider<SessionGuard>(create: (context) => context.read<AuthSessionBridge>().guard),
         // 이번 로그인 세션에서 등록한 평점입니다. 세션이 바뀌면 AuthViewModel을 보고 스스로 비웁니다.
         ChangeNotifierProvider<MyRatingsViewModel>(
           create: (context) => MyRatingsViewModel(

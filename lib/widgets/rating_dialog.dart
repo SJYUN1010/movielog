@@ -8,6 +8,9 @@ import 'rating_write_guard.dart';
 
 /// 별점과 코멘트를 입력받아 저장까지 마치는 Dialog입니다. 등록과 수정에 같이 씁니다.
 ///
+/// [showAddToFavorite]가 true이면 코멘트 아래에 "즐겨찾기에도 추가" 체크박스를 보여주고(Challenge),
+/// 체크 값이 [onSubmit]의 세 번째 인자로 전달됩니다. 평점 수정처럼 보이지 않을 때는 항상 false입니다.
+///
 /// 저장은 [onSubmit]에서 실행합니다.
 /// - 예외 없이 끝나면 `true`를 돌려주며 닫힙니다.
 /// - 실패하면 Dialog는 열린 채로 입력을 보존하고 오류 문구를 보여줍니다.
@@ -17,12 +20,16 @@ class RatingDialog extends StatefulWidget {
   const RatingDialog({
     super.key,
     required this.onSubmit,
+    this.showAddToFavorite = false,
     this.initialScore = 0,
     this.initialComment,
     this.title = '평점을 남겨주세요',
   });
 
-  final Future<void> Function(int score, String? comment) onSubmit;
+  final Future<void> Function(int score, String? comment, bool addToFavorites) onSubmit;
+
+  /// 상세 화면의 "평점 남기기"에서 아직 즐겨찾기하지 않은 영화일 때만 true로 둡니다.
+  final bool showAddToFavorite;
 
   /// 수정할 때 서버에 저장된 값으로 채웁니다. comment가 null이면 빈 칸으로 시작합니다.
   final int initialScore;
@@ -34,7 +41,8 @@ class RatingDialog extends StatefulWidget {
   /// 저장 성공 true, 취소 false, 아무 동작 없이 닫힘 null입니다.
   static Future<bool?> show(
     BuildContext context, {
-    required Future<void> Function(int score, String? comment) onSubmit,
+    required Future<void> Function(int score, String? comment, bool addToFavorites) onSubmit,
+    bool showAddToFavorite = false,
     int initialScore = 0,
     String? initialComment,
     String title = '평점을 남겨주세요',
@@ -45,6 +53,7 @@ class RatingDialog extends StatefulWidget {
       barrierColor: Colors.black.withValues(alpha: 0.33),
       builder: (_) => RatingDialog(
         onSubmit: onSubmit,
+        showAddToFavorite: showAddToFavorite,
         initialScore: initialScore,
         initialComment: initialComment,
         title: title,
@@ -62,6 +71,7 @@ class _RatingDialogState extends State<RatingDialog> {
     text: widget.initialComment ?? '',
   );
   bool _isSubmitting = false;
+  bool _addToFavorites = false;
   String? _errorMessage;
 
   /// 별점을 선택해야 확인할 수 있습니다. 코멘트만 입력해서는 활성화되지 않습니다.
@@ -84,7 +94,11 @@ class _RatingDialogState extends State<RatingDialog> {
     });
 
     try {
-      await widget.onSubmit(score, trimmed.isEmpty ? null : trimmed);
+      await widget.onSubmit(
+        score,
+        trimmed.isEmpty ? null : trimmed,
+        widget.showAddToFavorite && _addToFavorites,
+      );
       if (!mounted) return;
       popDialogIfActive(context, true);
     } catch (error) {
@@ -133,6 +147,10 @@ class _RatingDialogState extends State<RatingDialog> {
               ),
               const SizedBox(height: 13),
               SizedBox(height: 105, child: _buildCommentField()),
+              if (widget.showAddToFavorite) ...[
+                const SizedBox(height: 12),
+                _buildFavoriteCheck(),
+              ],
               // 저장 실패 문구가 나타나도 아래 버튼이 움직이지 않도록 고정 높이로 둡니다.
               SizedBox(
                 height: 34,
@@ -178,6 +196,36 @@ class _RatingDialogState extends State<RatingDialog> {
               ),
             ],
           ),
+        ),
+      ),
+    );
+  }
+
+  /// "즐겨찾기에도 추가" 체크 행입니다(W9 Challenge Figma). 저장 중에는 바꿀 수 없습니다.
+  Widget _buildFavoriteCheck() {
+    return GestureDetector(
+      behavior: HitTestBehavior.opaque,
+      onTap: _isSubmitting ? null : () => setState(() => _addToFavorites = !_addToFavorites),
+      child: Padding(
+        padding: const EdgeInsets.only(left: 3),
+        child: Row(
+          children: [
+            SizedBox(
+              width: 24,
+              height: 24,
+              child: Checkbox(
+                value: _addToFavorites,
+                onChanged: _isSubmitting ? null : (value) => setState(() => _addToFavorites = value ?? false),
+                activeColor: AppColors.violet,
+                side: const BorderSide(color: AppColors.violet, width: 2),
+                materialTapTargetSize: MaterialTapTargetSize.shrinkWrap,
+                visualDensity: VisualDensity.compact,
+                shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(4)),
+              ),
+            ),
+            const SizedBox(width: 12),
+            const Text('즐겨찾기에도 추가', style: _checkLabelStyle),
+          ],
         ),
       ),
     );
@@ -230,6 +278,14 @@ class _RatingDialogState extends State<RatingDialog> {
     height: 18 / 13,
     letterSpacing: 0,
     color: AppColors.commentText,
+  );
+
+  static const _checkLabelStyle = TextStyle(
+    fontSize: 14,
+    fontWeight: FontWeight.w400,
+    height: 19 / 14,
+    letterSpacing: 0,
+    color: AppColors.black,
   );
 
   static const _inputStyle = TextStyle(

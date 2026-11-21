@@ -2,6 +2,7 @@ import 'package:flutter/material.dart';
 import 'package:provider/provider.dart';
 
 import '../data/dto/tmdb_movie_dto.dart';
+import '../data/services/favorite_api_service.dart';
 import '../data/services/rating_api_service.dart';
 import '../data/services/tmdb_movie_service.dart';
 import '../theme/app_text_styles.dart';
@@ -75,6 +76,7 @@ class _MovieDetailLoaderState extends State<MovieDetailLoader> {
             context.read<AuthViewModel>(),
             context.read<MyRatingsViewModel>(),
             movie,
+            context.read<FavoriteApiService>(),
           ),
           child: const MovieDetailScreen(),
         );

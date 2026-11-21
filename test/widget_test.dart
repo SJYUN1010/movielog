@@ -93,7 +93,7 @@ void main() {
 
     testWidgets('a failed load shows a message and retry, and retry loads the member', (tester) async {
       final members = FakeMemberApiService()
-        ..meError = dioFailure('/v7/members/me')
+        ..meError = dioFailure('/v8/members/me')
         ..failMeTimes = 1;
       _useMobileViewport(tester);
       final auth = (await tester.runAsync(() => signedInAuthViewModel(members: members)))!;

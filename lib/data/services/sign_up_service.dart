@@ -5,7 +5,7 @@ import '../models/common_response.dart';
 import '../models/create_member_request.dart';
 import '../models/sign_up_models.dart';
 
-/// 회원가입과 중복 확인을 담당합니다. 6주차의 MemberCheckService를 v7 경로로 옮긴 것입니다. 회원가입 오류 code(COMMON400·COMMON409)는 v6과 같습니다.
+/// 회원가입과 중복 확인을 담당합니다. 6주차의 MemberCheckService를 v8 경로로 옮긴 것입니다. 회원가입 오류 code(COMMON400·COMMON409)는 v6과 같습니다.
 class SignUpService {
   SignUpService(this._dio);
 
@@ -15,7 +15,7 @@ class SignUpService {
   Future<bool> checkNickname(String nickname) async {
     final encoded = Uri.encodeComponent(nickname.trim());
     final response = await _dio.get<Map<String, dynamic>>(
-      '/v7/members/nickname/$encoded',
+      '/v8/members/nickname/$encoded',
     );
     return CheckResult.fromJson(response.data!).available;
   }
@@ -23,7 +23,7 @@ class SignUpService {
   Future<bool> checkEmail(String email) async {
     final encoded = Uri.encodeComponent(email.trim());
     final response = await _dio.get<Map<String, dynamic>>(
-      '/v7/members/email/$encoded',
+      '/v8/members/email/$encoded',
     );
     return CheckResult.fromJson(response.data!).available;
   }
@@ -31,7 +31,7 @@ class SignUpService {
   /// 201 성공 시 result에 회원 객체가 담깁니다. 400(비밀번호 형식), 409(중복)는 DioException입니다.
   Future<CommonResponse<SignUpResult>> signUp(CreateMemberRequest request) async {
     final response = await _dio.post<Map<String, dynamic>>(
-      '/v7/members',
+      '/v8/members',
       data: request.toJson(),
     );
 

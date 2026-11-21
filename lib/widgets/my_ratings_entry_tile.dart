@@ -2,13 +2,14 @@
 
 import '../theme/app_colors.dart';
 
-/// 마이페이지에서 "내가 등록한 평점" 화면으로 들어가는 행입니다.
+/// 마이페이지에서 "내가 등록한 평점"·"내 즐겨찾기" 같은 하위 화면으로 들어가는 행입니다.
 ///
 /// W6-ENTRY Figma: 358×64, 테두리 1.5px, 텍스트 16 / Bold, 오른쪽 8×14 화살표(선 2.5px).
 class MyRatingsEntryTile extends StatelessWidget {
-  const MyRatingsEntryTile({super.key, required this.onTap});
+  const MyRatingsEntryTile({super.key, required this.onTap, this.title = '내가 등록한 평점'});
 
   final VoidCallback onTap;
+  final String title;
 
   static const _titleStyle = TextStyle(
     fontSize: 16,
@@ -29,14 +30,14 @@ class MyRatingsEntryTile extends StatelessWidget {
       clipBehavior: Clip.antiAlias,
       child: InkWell(
         onTap: onTap,
-        child: const SizedBox(
+        child: SizedBox(
           height: 64,
           child: Padding(
-            padding: EdgeInsets.symmetric(horizontal: 17),
+            padding: const EdgeInsets.symmetric(horizontal: 17),
             child: Row(
               children: [
-                Expanded(child: Text('내가 등록한 평점', style: _titleStyle)),
-                CustomPaint(size: Size(8, 14), painter: _ChevronPainter()),
+                Expanded(child: Text(title, style: _titleStyle)),
+                const CustomPaint(size: Size(8, 14), painter: _ChevronPainter()),
               ],
             ),
           ),

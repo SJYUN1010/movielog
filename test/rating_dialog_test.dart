@@ -35,7 +35,7 @@ Future<_Host> _openRatingDialog(
             onPressed: () async {
               host.result = await RatingDialog.show(
                 context,
-                onSubmit: onSubmit,
+                onSubmit: (score, comment, _) => onSubmit(score, comment),
                 initialScore: initialScore,
                 initialComment: initialComment,
               );

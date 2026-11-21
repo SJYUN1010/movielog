@@ -16,13 +16,28 @@ class AuthInterceptor extends Interceptor {
   /// 토큰을 보낼 워크북 서버 host입니다(예: `workbook.devnoco.com`).
   final String protectedHost;
 
+  /// 보호 요청(JWT를 붙일 요청)인지 판단합니다. 로그인·회원가입·중복 확인·유저별 평점 조회는 공개 요청입니다.
   bool _isProtected(RequestOptions options) {
     final uri = options.uri;
+    // MovieLog 서버가 아닌 곳(TMDB, 이미지 서버 등)에는 JWT를 붙이지 않습니다.
+    if (uri.host != protectedHost) return false;
     final path = uri.path;
-    return uri.host == protectedHost &&
-        (path == '/v7/members/me' ||
-            path == '/v7/ratings' ||
-            path.startsWith('/v7/ratings/'));
+    final method = options.method.toUpperCase();
+
+    // 8주차: 내 정보와 평점 쓰기 (/v8로 전환)
+    final accountAndRatings =
+        path == '/v8/members/me' || path == '/v8/ratings' || path.startsWith('/v8/ratings/');
+
+    // 9주차 즐겨찾기: 등록(POST)·목록(GET) / 여부 조회(GET)·해제(DELETE). 경로의 값은 favoriteId가 아니라 movieId입니다.
+    final favorites =
+        (path == '/v8/favorites' && (method == 'GET' || method == 'POST')) ||
+        (RegExp(r'^/v8/favorites/[1-9]\d*$').hasMatch(path) &&
+            (method == 'GET' || method == 'DELETE'));
+
+    // 영화 기록 저장(평점 + 즐겨찾기, Challenge)
+    final movieRecord = path == '/v8/movie-records' && method == 'POST';
+
+    return accountAndRatings || favorites || movieRecord;
   }
 
   @override

@@ -324,7 +324,7 @@ void main() {
     });
 
     testWidgets('after a failed submit the screen can be left again', (tester) async {
-      final service = FakeSignUpService()..signUpError = dioFailure('/v7/members');
+      final service = FakeSignUpService()..signUpError = dioFailure('/v8/members');
       await pumpWithRouter(tester, service);
       await fillAndCheckAll(tester);
       await tester.tap(_submit);

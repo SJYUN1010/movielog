@@ -25,9 +25,19 @@ class TmdbMovieService {
       '/discover/movie',
       queryParameters: {
         'page': page,
+        'include_adult': false,
         'sort_by': 'popularity.desc',
         'with_genres': ?genreId,
       },
+    );
+    return TmdbMoviePageDto.fromJson(response.data!);
+  }
+
+  /// 영화 검색입니다. 빈 검색어는 서버에 보내지 않습니다(ViewModel에서 먼저 막습니다).
+  Future<TmdbMoviePageDto> searchMovies({required int page, required String query}) async {
+    final response = await _dio.get<Map<String, dynamic>>(
+      '/search/movie',
+      queryParameters: {'query': query, 'page': page, 'include_adult': false},
     );
     return TmdbMoviePageDto.fromJson(response.data!);
   }

@@ -49,10 +49,10 @@ void main() {
       final adapter = _RecordingAdapter();
       final dio = _client(MemoryTokenStorage('jwt-1'), adapter);
 
-      await dio.get<dynamic>('/v7/members/me');
-      await dio.post<dynamic>('/v7/ratings', data: {'movieId': 1, 'score': 3});
-      await dio.patch<dynamic>('/v7/ratings/9', data: {'score': 2});
-      await dio.delete<dynamic>('/v7/ratings/9');
+      await dio.get<dynamic>('/v8/members/me');
+      await dio.post<dynamic>('/v8/ratings', data: {'movieId': 1, 'score': 3});
+      await dio.patch<dynamic>('/v8/ratings/9', data: {'score': 2});
+      await dio.delete<dynamic>('/v8/ratings/9');
 
       for (final request in adapter.requests) {
         expect(request.headers['Authorization'], 'Bearer jwt-1', reason: request.path);
@@ -63,11 +63,11 @@ void main() {
       final adapter = _RecordingAdapter();
       final dio = _client(MemoryTokenStorage('jwt-1'), adapter);
 
-      await dio.post<dynamic>('/v7/auth/login', data: {'email': 'a@b.com', 'password': 'x'});
-      await dio.post<dynamic>('/v7/members', data: {});
-      await dio.get<dynamic>('/v7/members/nickname/abc');
-      await dio.get<dynamic>('/v7/members/email/a@b.com');
-      await dio.get<dynamic>('/v7/members/3/ratings');
+      await dio.post<dynamic>('/v8/auth/login', data: {'email': 'a@b.com', 'password': 'x'});
+      await dio.post<dynamic>('/v8/members', data: {});
+      await dio.get<dynamic>('/v8/members/nickname/abc');
+      await dio.get<dynamic>('/v8/members/email/a@b.com');
+      await dio.get<dynamic>('/v8/members/3/ratings');
 
       for (final request in adapter.requests) {
         expect(request.headers.containsKey('Authorization'), isFalse, reason: request.path);
@@ -78,7 +78,7 @@ void main() {
       final adapter = _RecordingAdapter();
       final dio = _client(MemoryTokenStorage('jwt-1'), adapter, base: 'https://api.themoviedb.org/3');
 
-      await dio.get<dynamic>('/v7/members/me'); // path가 같아도 host가 다릅니다.
+      await dio.get<dynamic>('/v8/members/me'); // path가 같아도 host가 다릅니다.
       await dio.get<dynamic>('https://image.tmdb.org/t/p/w500/poster.jpg');
 
       for (final request in adapter.requests) {
@@ -92,14 +92,14 @@ void main() {
       final dio = _client(storage, adapter);
 
       await dio.get<dynamic>(
-        '/v7/members/me',
+        '/v8/members/me',
         options: Options(headers: {'Authorization': 'Bearer stale-token'}),
       );
       expect(adapter.requests.single.headers['Authorization'], 'Bearer new-token');
 
       storage.token = null; // 토큰이 없으면 이전 헤더도 남기지 않습니다.
       await dio.get<dynamic>(
-        '/v7/members/me',
+        '/v8/members/me',
         options: Options(headers: {'Authorization': 'Bearer stale-token'}),
       );
       expect(adapter.requests.last.headers.containsKey('Authorization'), isFalse);
@@ -110,9 +110,9 @@ void main() {
       final storage = MemoryTokenStorage();
       final dio = _client(storage, adapter);
 
-      await dio.get<dynamic>('/v7/members/me');
+      await dio.get<dynamic>('/v8/members/me');
       storage.token = 'after-login';
-      await dio.get<dynamic>('/v7/members/me');
+      await dio.get<dynamic>('/v8/members/me');
 
       expect(adapter.requests.first.headers.containsKey('Authorization'), isFalse);
       expect(adapter.requests.last.headers['Authorization'], 'Bearer after-login');
@@ -124,7 +124,7 @@ void main() {
       final dio = _client(storage, adapter);
 
       await expectLater(
-        dio.get<dynamic>('/v7/members/me'),
+        dio.get<dynamic>('/v8/members/me'),
         throwsA(
           isA<DioException>()
               .having((e) => e.error, 'error', isA<StateError>())
@@ -139,8 +139,8 @@ void main() {
       final dio = Dio(BaseOptions(baseUrl: 'http://localhost:8080'))..httpClientAdapter = adapter;
       final client = createAuthMovieLogClient(MemoryTokenStorage('jwt-1'), dio: dio);
 
-      await client.get<dynamic>('/v7/members/me');
-      await client.get<dynamic>('/v7/members/nickname/abc');
+      await client.get<dynamic>('/v8/members/me');
+      await client.get<dynamic>('/v8/members/nickname/abc');
 
       expect(adapter.requests.first.headers['Authorization'], 'Bearer jwt-1');
       expect(adapter.requests.last.headers.containsKey('Authorization'), isFalse);

@@ -39,7 +39,7 @@ RatingWriteException classifyRatingWriteError(DioException error) {
   }
   return switch (code) {
     // 같은 영화에 이미 평점이 있음 / 남의 평점 / 없는 평점·회원은 안내만 하고 로그인 상태를 유지합니다.
-    'RATING409_1' || 'RATING403_1' || 'RATING404_1' || 'MEMBER404_1' =>
+    'RATING409_1' || 'FAVORITE409_1' || 'RATING403_1' || 'RATING404_1' || 'MEMBER404_1' =>
       RatingWriteException(message, RatingWriteKind.notice, code: code),
     // COMMON400(별점 범위·후기 길이)과 네트워크 실패는 서버 message 또는 기본 문구를 입력 화면에 보여줍니다.
     _ => RatingWriteException(message, RatingWriteKind.inline, code: code),
